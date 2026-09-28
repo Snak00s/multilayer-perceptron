@@ -29,6 +29,8 @@ class layer:
 		self._prevLayer = None
 		self._nextLayer = None
 
+		self._sigmoid = None
+
 		return
 
 	@classmethod
@@ -39,8 +41,9 @@ class layer:
 		obj.nodes = [0 for _ in range(size)]
 		return obj
 
-	def sigmoid(self) -> list:
-		return [1 / (1 + np.exp(-self.nodes[x])) for x in range(self._size)]
+	def aplySigmoid(self) -> list:
+		self._sigmoid = [1 / (1 + np.exp(-self.nodes[x])) for x in range(self._size)]
+		return self._sigmoid
 
 	def idx(self):
 		return self._idx
@@ -59,6 +62,9 @@ class layer:
 
 	def nextMatrix(self):
 		return self._nextMatrix
+
+	def sigmoid(self):
+		return self._sigmoid
 
 class model:
 
@@ -110,16 +116,18 @@ class model:
 	def forwardPropagation(self):
 		for layer in self._layers:
 			if layer.idx() != 0:
-				activateValue = layer.prevLayer().sigmoid()
+				activateValue = layer.prevLayer().aplySigmoid()
 				layer.nodes = [np.dot(activateValue, layer.prevMatrix()[i]) + 1 for i in range(layer.size())]
 		return self
 
 	# def backPropagation(self):
+	# 	l = 0.5
+	# 	example_amount = 10
 	# 	for layer in reversed(self._layers):
 	# 		matrix = layer.prevMatrix()
-	# 		if (matrix != None):
-	# 			for i in range(len(matrix)):
-	# 				for j in range(len(matrix[i])):
+	# 		for i in range(len(matrix)):
+	# 			for j in range(len(matrix[i])):
+	# 				matrix[i][j] = matrix[i][j] - l * (1 / example_amount) * ()
 	# 	return
 
 	@classmethod
