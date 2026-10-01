@@ -3,20 +3,12 @@ import random
 import math
 from dataclasses import dataclass, field
 
-# def sigNumber(x, n):
-# 	if x == 0:
-# 		return 0
-# 	return round(x, n - 1 - int(math.floor(math.log10(abs(x)))))
-
-# def weightDot(input_lst: list, weight_lst: list):
-# 	"""Calculate the node value before the activation func"""
-# 	return np.dot(input_lst, weight_lst) + 1
-
 @dataclass
 class layer:
 
 	_prevLayer: layer
 	_nextLayer: layer
+
 
 	def __init__(self):
 		self._idx = 0
@@ -29,7 +21,10 @@ class layer:
 		self._prevLayer = None
 		self._nextLayer = None
 
-		self._sigmoid = None
+		self._activate = None
+
+		self._inputIdx = 0
+		self._sampleAmount = 0
 
 		return
 
@@ -41,9 +36,14 @@ class layer:
 		obj.nodes = [0 for _ in range(size)]
 		return obj
 
-	def aplySigmoid(self) -> list:
-		self._sigmoid = [1 / (1 + np.exp(-self.nodes[x])) for x in range(self._size)]
-		return self._sigmoid
+	def aplySigmoid(self):
+		self._activate = np.array([[1 / (1 + np.exp(-self.nodes[i][x])) for x in range(self._size)] for i in range(self._sampleAmount)])
+		return self._activate
+
+	def softMax(self):
+		s = [np.sum([np.exp(x) for x in self.nodes[i]]) for i in range(self._sampleAmount)]
+		self._activate = np.array([[np.exp(x) / s[i] for x in self.nodes[i]] for i in range(self._sampleAmount)])
+		return self._activate
 
 	def idx(self):
 		return self._idx
@@ -63,8 +63,11 @@ class layer:
 	def nextMatrix(self):
 		return self._nextMatrix
 
-	def sigmoid(self):
-		return self._sigmoid
+	def activate(self):
+		return self._activate
+
+	def currentNodeStep(self) -> list:
+		return self.nodes[self._inputIdx]
 
 class model:
 
@@ -73,67 +76,116 @@ class model:
 
 	def __init__(self):
 		self._layers = []
-		self._interLayerMatrix = []
+		self._interLayerMatrix = None
 		self._expectedOutput = []
+		self._inputIdx = 0
+		self._sampleAmount = 0
+		self._costMatrix = []
+		self._learningRate = 0.1
 		return
 
-	@staticmethod
-	def createInterLayerMatrix(prevLayerSize: int, actualLayerSize: int) -> list :
+	def _delta(self, actualLayer: layer):
+		if (actualLayer.nextLayer() == None):
+			return np.array(actualLayer.activate() - self._expectedOutput)
 
+		activate = actualLayer.activate()
+		dA = activate * (1 - activate)
+		delta = (self._delta(actualLayer.nextLayer()) @ actualLayer.nextMatrix()) * dA
+
+		return delta
+
+	def backPropagation(self):
+		for layer in reversed(self._layers):
+			if layer.nextLayer() == None:
+				delta = self._delta(layer)
+				layer._prevMatrix = layer.prevMatrix() - (self._learningRate * (1 / self._sampleAmount) * np.dot(delta.T, layer.prevLayer().activate()))
+			elif layer.prevLayer() != None:
+				delta = self._delta(layer)
+				layer._prevMatrix = layer.prevMatrix() - (self._learningRate * (1 / self._sampleAmount) * np.dot(delta.T, layer.prevLayer().activate()))
+		return self
+
+	def _catCrossEntropy(self):
+		predict = self.layers()[-1].activate()
+		self._costMatrix = np.array(-((self._expectedOutput * np.log(predict)) + (1 - self._expectedOutput) * np.log(1 - predict)))
+		return self
+
+	def forwardPropagation(self):
+		for layer in self._layers:
+			if layer.idx() == 0:
+				layer._activate = layer.nodes
+				continue
+			if layer.idx() == 1:
+				for i in range(self._sampleAmount):
+					layerInput = layer.prevLayer().nodes[i]
+					layer.nodes[i] = [np.dot(layerInput, layer.prevMatrix()[j]) + 1 for j in range(layer.size())]
+			else:
+				layerInput = layer.prevLayer().aplySigmoid()
+				for i in range(self._sampleAmount):
+					layer.nodes[i] = [np.dot(layerInput[i], layer.prevMatrix()[g]) + 1 for g in range(layer.size())]
+		self._layers[-1].softMax()
+		return self
+
+	def trainLoop(self, epochAmount: int):
+		for i in range(epochAmount):
+			self.forwardPropagation()
+			self._catCrossEntropy()
+			print(f"epoch {i + 1} / {epochAmount} | cost =", self.epochCost())
+			self.backPropagation()
+		return self
+
+	def validation(self, inputs: list, expectedOutput: list):
+		self.fillInputsLayer(inputs)
+		self.fillExpectedOutput(expectedOutput)
+		self.forwardPropagation()
+		print(f"| validCost =", self.epochCost())
+
+	def fillInputsLayer(self, inputs: list):
+		try:
+			for row in inputs:
+				assert len(row) == self._layers[0].size()
+		except AssertionError:
+			print("Error: model.fillInputsLayer: len(inputs) != _layers[0].size()")
+			exit(1)
+		self._layers[0].nodes = inputs
+		self._layers[0]._activate = inputs.copy()
+		self._sampleAmount = len(inputs)
+		row = len(row)
+		for i in range(1, len(self._layers)):
+			self._layers[i]._sampleAmount = self._sampleAmount
+			self._layers[i].nodes = np.zeros((self._sampleAmount, self._layers[i].size()))
+		return self
+
+	def fillExpectedOutput(self, expectedOutput):
+		try:
+			for row in expectedOutput:
+				assert len(row) == self._layers[-1].size()
+		except AssertionError:
+			print("Error: model.fillInputsLayer: len(inputs) != _layers[0].size()")
+			exit(1)
+		self._expectedOutput = np.array(expectedOutput)
+		return self
+
+	@staticmethod
+	def createInterLayerMatrix(prevLayerSize: int, actualLayerSize: int):
 		upLim = np.sqrt(6 / prevLayerSize)
 		downLim = - np.sqrt(6 / prevLayerSize)
-		return [[random.uniform(downLim, upLim) for _ in range(prevLayerSize)] for _ in range(actualLayerSize)]
+		return np.array([[random.uniform(downLim, upLim) for _ in range(prevLayerSize)] for _ in range(actualLayerSize)])
 
 	def linkLayers(self, actualLayer: layer):
-
 		if (actualLayer._idx > 0):
 			actualLayer._prevMatrix = self._interLayerMatrix[actualLayer._idx - 1]
 			actualLayer._prevLayer = self._layers[actualLayer._idx - 1]
 
 		if (actualLayer._idx < len(self._interLayerMatrix)):
 			actualLayer._nextMatrix = self._interLayerMatrix[actualLayer._idx]
-			actualLayer._nextLayer = self._layers[actualLayer._idx]
+			actualLayer._nextLayer = self._layers[actualLayer._idx + 1]
 		return self
-
-	def fillInputsLayer(self, inputs: list):
-		try:
-			assert len(inputs) == self._layers[0].size()
-		except AssertionError:
-			print("Error: model.fillInputsLayer: len(inputs) != _layers[0].size()")
-			exit(1)
-		self._layers[0].nodes = inputs
-		return self
-
-	def fillExpectedOutput(self, expectedOutput):
-		try:
-			assert len(expectedOutput) == self._layers[-1].size()
-		except AssertionError:
-			print("Error: model.fillInputsLayer: len(inputs) != _layers[0].size()")
-			exit(1)
-		self._expectedOutput = expectedOutput
-		return self
-
-	def forwardPropagation(self):
-		for layer in self._layers:
-			if layer.idx() != 0:
-				activateValue = layer.prevLayer().aplySigmoid()
-				layer.nodes = [np.dot(activateValue, layer.prevMatrix()[i]) + 1 for i in range(layer.size())]
-		return self
-
-	# def backPropagation(self):
-	# 	l = 0.5
-	# 	example_amount = 10
-	# 	for layer in reversed(self._layers):
-	# 		matrix = layer.prevMatrix()
-	# 		for i in range(len(matrix)):
-	# 			for j in range(len(matrix[i])):
-	# 				matrix[i][j] = matrix[i][j] - l * (1 / example_amount) * ()
-	# 	return
 
 	@classmethod
 	def createNetwork(cls, lst: list[layer]):
 		obj = cls()
 		obj._layers = lst
+		# obj._layers[0]._activate = obj._layers[0].nodes
 		obj._interLayerMatrix = [obj.createInterLayerMatrix(lst[x].size(), lst[x + 1].size()) for x in range(len(lst) - 1)]
 		for x in obj._layers:
 			obj.linkLayers(x)
@@ -144,3 +196,15 @@ class model:
 
 	def interLayerMatrix(self):
 		return self._interLayerMatrix
+
+	def costMatrix(self):
+		return self._costMatrix
+
+	def epochCost(self):
+		return np.sum(self._costMatrix) / len(self._expectedOutput)
+
+	def resetLayers(self):
+		for i in range(len(self._layers)):
+			self._layers[i].nodes = []
+			self._layers[i]._activate = []
+		return self
