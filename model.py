@@ -66,9 +66,6 @@ class layer:
 	def activate(self):
 		return self._activate
 
-	def currentNodeStep(self) -> list:
-		return self.nodes[self._inputIdx]
-
 class model:
 
 	_layers : list[layer]
@@ -82,34 +79,36 @@ class model:
 		self._sampleAmount = 0
 		self._costMatrix = []
 		self._learningRate = 0.1
+		self._costPerEpoch = []
+		self._accuracy = []
 		return
 
-	def _delta(self, actualLayer: layer):
+	def __delta(self, actualLayer: layer):
 		if (actualLayer.nextLayer() == None):
 			return np.array(actualLayer.activate() - self._expectedOutput)
 
 		activate = actualLayer.activate()
 		dA = activate * (1 - activate)
-		delta = (self._delta(actualLayer.nextLayer()) @ actualLayer.nextMatrix()) * dA
+		delta = (self.__delta(actualLayer.nextLayer()) @ actualLayer.nextMatrix()) * dA
 
 		return delta
 
-	def backPropagation(self):
+	def __backPropagation(self):
 		for layer in reversed(self._layers):
 			if layer.nextLayer() == None:
-				delta = self._delta(layer)
+				delta = self.__delta(layer)
 				layer._prevMatrix = layer.prevMatrix() - (self._learningRate * (1 / self._sampleAmount) * np.dot(delta.T, layer.prevLayer().activate()))
 			elif layer.prevLayer() != None:
-				delta = self._delta(layer)
+				delta = self.__delta(layer)
 				layer._prevMatrix = layer.prevMatrix() - (self._learningRate * (1 / self._sampleAmount) * np.dot(delta.T, layer.prevLayer().activate()))
 		return self
 
-	def _catCrossEntropy(self):
+	def __catCrossEntropy(self):
 		predict = self.layers()[-1].activate()
 		self._costMatrix = np.array(-((self._expectedOutput * np.log(predict)) + (1 - self._expectedOutput) * np.log(1 - predict)))
 		return self
 
-	def forwardPropagation(self):
+	def __forwardPropagation(self):
 		for layer in self._layers:
 			if layer.idx() == 0:
 				layer._activate = layer.nodes
@@ -125,19 +124,41 @@ class model:
 		self._layers[-1].softMax()
 		return self
 
-	def trainLoop(self, epochAmount: int):
+	def	__calculateAccuracy(self):
+		good = 0
+		bad = 0
+		output = self._layers[-1].activate()
+		for i in range(len(output)):
+			idx = False
+			if (self._expectedOutput[i][1] > self._expectedOutput[i][0]):
+				idx = True
+			if (output[i][int(idx)] > output[i][int(not(idx))]):
+				good += 1
+			else:
+				bad += 1
+		return float(good / (good + bad))
+
+
+
+
+
+	def trainLoop(self, validInputs: list, validOutputs: list, epochAmount: int):
 		for i in range(epochAmount):
-			self.forwardPropagation()
-			self._catCrossEntropy()
-			print(f"epoch {i + 1} / {epochAmount} | cost =", self.epochCost())
-			self.backPropagation()
+			self.__forwardPropagation()
+			self.__catCrossEntropy()
+			print(f"epoch {i + 1} / {epochAmount} | cost =", self.__epochCost())
+			self._costPerEpoch.append(self.__epochCost())
+			self._accuracy.append(self.__calculateAccuracy())
+
+			self.__backPropagation()
 		return self
 
 	def validation(self, inputs: list, expectedOutput: list):
 		self.fillInputsLayer(inputs)
 		self.fillExpectedOutput(expectedOutput)
-		self.forwardPropagation()
-		print(f"| validCost =", self.epochCost())
+		self.__forwardPropagation()
+		print(f"| validCost =", self.__epochCost())
+		return self
 
 	def fillInputsLayer(self, inputs: list):
 		try:
@@ -166,12 +187,12 @@ class model:
 		return self
 
 	@staticmethod
-	def createInterLayerMatrix(prevLayerSize: int, actualLayerSize: int):
+	def __createInterLayerMatrix(prevLayerSize: int, actualLayerSize: int):
 		upLim = np.sqrt(6 / prevLayerSize)
 		downLim = - np.sqrt(6 / prevLayerSize)
 		return np.array([[random.uniform(downLim, upLim) for _ in range(prevLayerSize)] for _ in range(actualLayerSize)])
 
-	def linkLayers(self, actualLayer: layer):
+	def __linkLayers(self, actualLayer: layer):
 		if (actualLayer._idx > 0):
 			actualLayer._prevMatrix = self._interLayerMatrix[actualLayer._idx - 1]
 			actualLayer._prevLayer = self._layers[actualLayer._idx - 1]
@@ -185,10 +206,9 @@ class model:
 	def createNetwork(cls, lst: list[layer]):
 		obj = cls()
 		obj._layers = lst
-		# obj._layers[0]._activate = obj._layers[0].nodes
-		obj._interLayerMatrix = [obj.createInterLayerMatrix(lst[x].size(), lst[x + 1].size()) for x in range(len(lst) - 1)]
+		obj._interLayerMatrix = [obj.__createInterLayerMatrix(lst[x].size(), lst[x + 1].size()) for x in range(len(lst) - 1)]
 		for x in obj._layers:
-			obj.linkLayers(x)
+			obj.__linkLayers(x)
 		return obj
 
 	def layers(self):
@@ -197,10 +217,7 @@ class model:
 	def interLayerMatrix(self):
 		return self._interLayerMatrix
 
-	def costMatrix(self):
-		return self._costMatrix
-
-	def epochCost(self):
+	def __epochCost(self):
 		return np.sum(self._costMatrix) / len(self._expectedOutput)
 
 	def resetLayers(self):
@@ -208,3 +225,9 @@ class model:
 			self._layers[i].nodes = []
 			self._layers[i]._activate = []
 		return self
+
+	def costPerEpoch(self):
+		return self._costPerEpoch
+
+	def accuracy(self):
+		return self._accuracy

@@ -6,18 +6,6 @@ import sys
 import math
 from model import model, layer
 
-def sigNumber(x, n):
-	if x == 0:
-		return 0
-	return round(x, n - 1 - int(math.floor(math.log10(abs(x)))))
-
-def weightDot(input_lst: list, weight_lst: list):
-	"""Calculate the node value before the activation func"""
-	return np.dot(input_lst, weight_lst) + 1
-
-def catCrossEntropy(expectedOutput: list, outLayerOutput: list):
-	return -(np.sum([expectedOutput[i] * np.log(outLayerOutput[i]) for i in range(len(expectedOutput))]))
-
 def createExpectedOutput(rawOutput: list):
 	ret = []
 	for x in rawOutput:
@@ -26,12 +14,6 @@ def createExpectedOutput(rawOutput: list):
 		else:
 			ret.append([0, 1])
 	return ret
-
-def epochCost(res: np.array, expRes: np.array):
-	losses = -((expRes * np.log(res)) + (1 - expRes) * np.log(1 - res))
-	m = len(res)
-	cost = (1 / m) * losses
-	return np.sum(cost)
 
 def main():
 
@@ -47,18 +29,19 @@ def main():
 		layer.createLayer(idx=2, size=24),
 		layer.createLayer(idx=3, size=2)
 	])
+	validRows = np.array(data.iloc[401:])
+	validInput = np.array(validRows[:, 2:], dtype=np.float64)
+	validInput = (validInput - validInput.mean(axis=0)) / validInput.std(axis=0)
+	validOutput = np.array(createExpectedOutput(validRows[:, 1:2]))
 
 	mlp.fillInputsLayer(inputs).fillExpectedOutput(expectedOutput)
 
-	mlp.trainLoop(100)
+	mlp.trainLoop(validInput, validOutput, 100)
 
-	# print(mlp._layers[-1].activate())
-
-	# print(epochCost(mlp._layers[-1].activate(), expectedOutput))
-
-	# print(mlp.epochCost())
-
-	# mlp.backPropagation()
+	plt.plot(np.array(mlp.costPerEpoch()))
+	plt.xlabel("epoch")
+	plt.ylabel("trainCost")
+	plt.show()
 
 	return
 
