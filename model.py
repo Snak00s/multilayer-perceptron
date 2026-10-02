@@ -1,6 +1,5 @@
 import numpy as np
 import random
-import math
 from dataclasses import dataclass, field
 
 @dataclass
@@ -78,7 +77,7 @@ class model:
 		self._inputIdx = 0
 		self._sampleAmount = 0
 		self._costMatrix = []
-		self._learningRate = 0.1
+		self._learningRate = 0.01
 		self._costPerEpoch = []
 		self._accuracy = []
 		return
@@ -100,18 +99,19 @@ class model:
 				layer._prevMatrix = layer.prevMatrix() - (self._learningRate * (1 / self._sampleAmount) * np.dot(delta.T, layer.prevLayer().activate()))
 			elif layer.prevLayer() != None:
 				delta = self.__delta(layer)
-				layer._prevMatrix = layer.prevMatrix() - (self._learningRate * (1 / self._sampleAmount) * np.dot(delta.T, layer.prevLayer().activate()))
+				# layer._prevMatrix = layer.prevMatrix() - (self._learningRate * (1 / self._sampleAmount) * np.dot(delta.T, layer.prevLayer().activate()))
+				layer._prevMatrix = layer.prevMatrix() - (self._learningRate * np.dot(delta.T, layer.prevLayer().activate()))
 		return self
 
 	def __catCrossEntropy(self):
 		predict = self.layers()[-1].activate()
-		self._costMatrix = np.array(-((self._expectedOutput * np.log(predict)) + (1 - self._expectedOutput) * np.log(1 - predict)))
-		return self
+		# self._costMatrix = np.array(-((self._expectedOutput * np.log(predict)) + (1 - self._expectedOutput) * np.log(1 - predict)))
+		# self._costMatrix = np.array(-np.sum(self._expectedOutput * np.log(predict)))
+		return np.array(-np.sum(self._expectedOutput * np.log(predict)))
 
 	def __forwardPropagation(self):
 		for layer in self._layers:
 			if layer.idx() == 0:
-				layer._activate = layer.nodes
 				continue
 			if layer.idx() == 1:
 				for i in range(self._sampleAmount):
@@ -138,14 +138,10 @@ class model:
 				bad += 1
 		return float(good / (good + bad))
 
-
-
-
-
 	def trainLoop(self, validInputs: list, validOutputs: list, epochAmount: int):
 		for i in range(epochAmount):
 			self.__forwardPropagation()
-			self.__catCrossEntropy()
+			self._costMatrix = self.__catCrossEntropy()
 			print(f"epoch {i + 1} / {epochAmount} | cost =", self.__epochCost())
 			self._costPerEpoch.append(self.__epochCost())
 			self._accuracy.append(self.__calculateAccuracy())
@@ -161,12 +157,8 @@ class model:
 		return self
 
 	def fillInputsLayer(self, inputs: list):
-		try:
-			for row in inputs:
-				assert len(row) == self._layers[0].size()
-		except AssertionError:
-			print("Error: model.fillInputsLayer: len(inputs) != _layers[0].size()")
-			exit(1)
+		for row in inputs:
+			assert len(row) == self._layers[0].size()
 		self._layers[0].nodes = inputs
 		self._layers[0]._activate = inputs.copy()
 		self._sampleAmount = len(inputs)
@@ -177,12 +169,8 @@ class model:
 		return self
 
 	def fillExpectedOutput(self, expectedOutput):
-		try:
-			for row in expectedOutput:
-				assert len(row) == self._layers[-1].size()
-		except AssertionError:
-			print("Error: model.fillInputsLayer: len(inputs) != _layers[0].size()")
-			exit(1)
+		for row in expectedOutput:
+			assert len(row) == self._layers[-1].size()
 		self._expectedOutput = np.array(expectedOutput)
 		return self
 
