@@ -6,24 +6,29 @@ class Parser:
 	_argDict: dict[str, list]
 	_argNarg: dict[str, int]
 	_argType: dict[str, type[int]]
+	_argOpt: dict[str, bool]
 
 	def __init__(self):
 		self._argDict = dict()
+		self._argDict.setdefault('default')
 		self._argNarg = dict()
 		self._argType = dict()
+		self._argOpt = dict()
 		pass
 
-	def add_arg(self, argName: str, ammount: int, argType: type[type]):
+	def add_arg(self, argName: str, ammount: int, argType: type[type], optionnal=False):
 		"""Add an argument to the list of argument to catch.
 		- argName - add the argument name to manage DO NOT PUT '-' character at begin or end.
 		- ammount - define the ammount of value per arguemnt if <= 0 : will set to sys.maxsize.
 		- argType - define the value type of the argument.
+		- optionnal - if set to true, 'parse_args' will throw error if the ammount of args given dont match the asked one.
 		"""
 		if (self._argDict.get(argName) is not None):
 			raise AssertionError(f"Argument {argName}: Already set")
 		self._argDict[argName] = []
 		self._argNarg[argName] = ammount if ammount != 0 else sys.maxsize
 		self._argType[argName] = argType
+		self._argOpt[argName] = optionnal
 		return self
 
 	def parse_args(self):
@@ -44,8 +49,50 @@ class Parser:
 				raise AssertionError(f"{name}: too many value, max={self._argNarg[name]}.")
 
 		for arg in self._argDict.keys():
-			if (len(self._argDict[arg]) < self._argNarg[arg] and self._argNarg[arg] != sys.maxsize):
-				raise AssertionError(f"{arg}: not enought argument, nargs={self._argNarg[arg]}")
+			if (arg != 'default'):
+				if (self._argOpt[arg] is False
+					and len(self._argDict[arg]) < self._argNarg[arg]
+					and self._argNarg[arg] != sys.maxsize):
+					raise AssertionError(f"{arg}: not enought argument, nargs={self._argNarg[arg]}")
+			
+		return self._argDict
+
+	def reset_args(self):
+		for arg in self._argDict.keys():
+			if (arg != 'default'):
+				self._argDict[arg] = []
+
+	def get_argument_status(self, argName: str):
+		return [self._argDict[argName],
+			(len(self._argDict[argName]), self._argNarg[argName]),
+			self._argType[argName]
+			]
+
+	def parse_str(self, string: str):
+		"""Will parse argument in sys.argv,
+		it should catch all argument added via 'add_arg()' and respect given limitation"""
+		name = ''
+		obj = int
+
+		toParse = string.split()
+
+		for val in toParse:
+			if self._argDict.get(val.strip('-')) is not None:
+				name = val.strip('-')
+				obj = self._argType[name]
+				continue
+
+			if len(self._argDict[name]) < self._argNarg[name]:
+				self._argDict[name].append(obj(val))
+			else:
+				raise AssertionError(f"{name}: too many value, max={self._argNarg[name]}.")
+
+		for arg in self._argDict.keys():
+			if (arg != 'default'):
+				if (self._argOpt[arg] is False
+					and len(self._argDict[arg]) < self._argNarg[arg]
+					and self._argNarg[arg] != sys.maxsize):
+					raise AssertionError(f"{arg}: not enought argument, nargs={self._argNarg[arg]}")
 			
 		return self._argDict
 

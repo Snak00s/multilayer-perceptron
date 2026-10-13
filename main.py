@@ -31,25 +31,19 @@ def main():
 
 		args = parser.parse_args()
 
-		# ------------------Data Repartition------------------
-
-		data = pd.read_csv("data.csv", header=None).reset_index(drop="True")
-		data = data.sample(frac=1)
-		dataRows = np.array(data.iloc[0:400])
-		inputs = np.array(dataRows[:, 2:], dtype=np.float64)
-		inputs = (inputs - inputs.mean(axis=0)) / inputs.std(axis=0)
-		expectedOutput = np.array(createExpectedOutput(dataRows[:, 1:2]))
-
-		validRows = np.array(data.iloc[401:])
-		validInput = np.array(validRows[:, 2:], dtype=np.float64)
-		validInput = (validInput - validInput.mean(axis=0)) / validInput.std(axis=0)
-		validOutput = np.array(createExpectedOutput(validRows[:, 1:2]))
-
 		#-----------------------Training----------------------
 
+		data = np.load('mlp_data.npy', allow_pickle=True)
+
+		data = data.item()
+
+		trainData : tuple = data['train']
+		validData : tuple = data['valid']
+		# testData : tuple = data['test']
+
 		laySize = args['layer']
-		laySize.append(len(expectedOutput[0]))
-		laySize.insert(0, len(inputs[0]))
+		laySize.append(len(trainData[1][0]))
+		laySize.insert(0, len(trainData[0][0]))
 
 		mlp = model.createNetwork([
 			layer.createLayer(size=laySize[i], activation='sigmoid')
@@ -60,23 +54,17 @@ def main():
 			])
 
 		mlp.fit(
-			trainData=(inputs, expectedOutput),
-			validData=(validInput, validOutput),
-			learningRate=args['learning_rate'][0],
-			batchSize=len(inputs),
-			epoch=args['epochs'][0],
-			verbose=True
+				trainData=trainData,
+				validData=validData,
+				learningRate=args['learning_rate'][0],
+				batchSize=args['batch_size'][0],
+				epoch=args['epochs'][0],
+				verbose=True
 			)
 
-		#-----------------------Print-------------------------
+		#-----------------------------------------------------
 
-		# print("----------------------------Cost----------------------------")
-		# print(f"Begin cost :		train = {mlp.costPerEpoch()[0]:.3f}, valid = {mlp.validCostPerEpoch()[0]:.3f}")
-		# print(f"End cost :		train = {mlp.costPerEpoch()[-1]:.3f}, valid = {mlp.validCostPerEpoch()[-1]:.3f}")
-		# print("--------------------------Accuracy--------------------------")
-		# print(f"Begin accuracy :	train = {mlp.accuracy()[0]:.3f}, valid = {mlp.validAccuracy()[0]:.3f}")
-		# print(f"End accuracy :		train = {mlp.accuracy()[-1]:.3f}, valid = {mlp.validAccuracy()[-1]:.3f}")
-		# print("------------------------------------------------------------")
+		# mlp.useModel(testData=testData)
 
 		plt.figure()
 		plt.plot(np.array(mlp.costPerEpoch()))
@@ -85,6 +73,7 @@ def main():
 		plt.xlabel("epoch")
 		plt.ylabel("Cost")
 		plt.legend(['Train cost', 'Validation cost'])
+		plt.savefig("cost.png")
 
 		plt.figure()
 		plt.plot(np.array(mlp.accuracy()))
@@ -93,15 +82,10 @@ def main():
 		plt.xlabel("epoch")
 		plt.ylabel("Accuracy")
 		plt.legend(['Train accuracy', 'Validation accuracy'])
-		# np.save("mlp", mlp)
-
-		# test = np.load("mlp.npy", allow_pickle=True)
-		# test = test.item()
-		# print(test._sampleAmount)
-
-		plt.show()
+		plt.savefig("accuracy.png")
 
 		#-----------------------------------------------------
+		np.save("mlp", mlp.exportModel())
 
 	except Exception as AE:
 		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)

@@ -9,8 +9,8 @@ class mlp_utils:
 		p = np.random.permutation(len(a))
 		return a[p], b[p]
 
-	def categoricalCrossentropy(predict, expPredict):
-		return np.array(-np.sum(expPredict * np.log(predict + 1e-12)))
+	def categoricalCrossentropy(predict, expPredict) -> float:
+		return -np.sum(expPredict * np.log(predict + 1e-12))
 
 	def	calculateAccuracy(predict: list[list], expPredict: list[list]):
 		good = 0
@@ -25,8 +25,11 @@ class mlp_utils:
 				bad += 1
 		return float(good / (good + bad))
 
-	def epochCost(costMatrix, expOutput):
-		return np.sum(costMatrix) / len(expOutput)
+	def batchCost(costMatrix, expOutput):
+		return costMatrix / len(expOutput)
+
+	def ponderate(matrix, samplePerBatch):
+		return np.sum([matrix[i] * samplePerBatch[i] for i in range(len(samplePerBatch))]) / np.sum(samplePerBatch)
 
 @dataclass
 class layer:
@@ -101,18 +104,20 @@ class model:
 
 	_layers: list[layer]
 	_expectedOutput: list[float]
+	_trainInputs: list[float]
 	_lossFunc: function
 
 	def __init__(self):
 		self._layers = []
 		self._interLayerMatrix = []
 		self._expectedOutput = []
+		self._trainOutputs = []
+		self._trainInputs = []
 		self._sampleAmount = 0
-		self._learningRate = 0.0314
-		self._costMatrix = []
+		self._learningRate = 0
 		self._costPerEpoch = []
 		self._accuracy = []
-		self._validCostMatrix = []
+		self._validCost = 0
 		self._validcostPerEpoch = []
 		self._validAccuracy = []
 		return
@@ -150,16 +155,15 @@ class model:
 			return np.array(actualLayer.activate() - self._expectedOutput)
 		activate = actualLayer.activate()
 		dA = activate * (1 - activate)
-		delta = (self.__delta(actualLayer.nextLayer()) @ actualLayer.nextMatrix()) * dA
+		# delta = (self.__delta(actualLayer.nextLayer()) @ actualLayer.nextMatrix()) * dA
+		delta = (actualLayer.nextLayer()._delta @ actualLayer.nextMatrix() * dA)
 
 		return delta
 
 	def __backPropagation(self):
-		for layer in self._layers:
-			if layer.prevLayer() is not None:
-				layer._delta = self.__delta(layer)
 		for layer in reversed(self._layers):
 			if layer.prevLayer() is not None:
+				layer._delta = self.__delta(layer)
 				layer._prevMatrix -= (self._learningRate / self._sampleAmount * (layer._delta.T @ layer.prevLayer().activate()))
 		return self
 
@@ -189,11 +193,11 @@ class model:
 				if layer.idx() == 1:
 					for i in range(self.validSampleAmount):
 						layerInput = layer.prevLayer().nodes[i]
-						layer.nodes[i] = [(layerInput @ layer.prevMatrix()[j]) + 1 for j in range(layer.size())]
+						layer.nodes[i] = np.array([(layerInput @ layer.prevMatrix()[j]) + 1 for j in range(layer.size())])
 				else:
 					layerInput = layer.prevLayer().activFunc()
 					for i in range(self.validSampleAmount):
-						layer.nodes[i] = [(layerInput[i] @ layer.prevMatrix()[g]) + 1 for g in range(layer.size())]
+						layer.nodes[i] = np.array([(layerInput[i] @ layer.prevMatrix()[g]) + 1 for g in range(layer.size())])
 			self.validLayers[-1].activFunc()
 			return self
 
@@ -234,22 +238,32 @@ class model:
 			assert len(row) == self._layers[0].size()
 		for row in expectedOutput:
 			assert len(row) == self._layers[-1].size()
-		inputs = np.array(inputs)
-		self._layers[0].nodes = inputs
-		self._layers[0]._activate = inputs.copy()
-		self._sampleAmount = len(inputs)
-		for i in range(1, len(self._layers)):
-			self._layers[i]._sampleAmount = self._sampleAmount
-			self._layers[i].nodes = np.zeros((self._sampleAmount, self._layers[i].size()))
-		self._expectedOutput = np.array(expectedOutput)
+		self._trainInputs = np.array(inputs)
+		self._trainOutputs = np.array(expectedOutput)
 		return self
+
+	def __updateNodes(self, step: int, batchSize: int):
+
+		inputSample = self._trainInputs[step:step + batchSize]
+		self._sampleAmount = len(inputSample)
+		for i in range(len(self._layers)):
+			self._layers[i]._sampleAmount = self._sampleAmount
+			if i != 0:
+				self._layers[i].nodes = np.zeros((self._sampleAmount, self._layers[i].size()))
+			else:
+				self._layers[i].nodes = inputSample
+				self._layers[i]._activate = inputSample.copy()
+		self._expectedOutput = self._trainOutputs[step:step + batchSize]
+		if (step + self._sampleAmount == len(self._trainInputs)):
+			return -1
+		return step + self._sampleAmount
 
 	def fit(self,
 	        trainData: tuple[np.ndarray],
 			validData: tuple[np.ndarray],
 			learningRate: float=0.0314,
 			lossFunc: str='categoricalCrossentropy',
-			batchSize: int=0,
+			batchSize: int=1,
 			epoch: int=100,
 			verbose: bool=False
 		):
@@ -272,26 +286,87 @@ class model:
 				raise AssertionError(f'Invalid loss function: {lossFunc}')
 		self.__fillTrainIO(trainData[0], trainData[1])
 		self._learningRate = learningRate
+		self._costPerEpoch = []
+		self._accuracy = []
 		vMod = self.__validation(self, validData[0], validData[1])
 		for i in range(epoch):
-			self.__forwardPropagation()
-			self._costMatrix = self._lossFunc(self._layers[-1].activate(), self._expectedOutput)
-			self._costPerEpoch.append(mlp_utils.epochCost(self._costMatrix, self._expectedOutput))
-			self._accuracy.append(mlp_utils.calculateAccuracy(self._layers[-1].activate(), self._expectedOutput))
+			batchCost = []
+			batchAcc = []
+			samplePerBatch = []
+
+			step = int(0)
+			while step != -1:
+				step = self.__updateNodes(step, batchSize)
+				samplePerBatch.append(self._sampleAmount)
+				self.__forwardPropagation()
+				costMatrix = self._lossFunc(self._layers[-1].activate(), self._expectedOutput)
+				batchCost.append(mlp_utils.batchCost(costMatrix, self._expectedOutput))
+				batchAcc.append(mlp_utils.calculateAccuracy(self._layers[-1].activate(), self._expectedOutput))
+				self.__backPropagation()
+
+			self._costPerEpoch.append(mlp_utils.ponderate(batchCost, samplePerBatch))
+			self._accuracy.append(mlp_utils.ponderate(batchAcc, samplePerBatch))
 			if (verbose is True):
 				print(f"epoch {i + 1} / {epoch} | cost = {self._costPerEpoch[-1]:.4f} | accuracy = {self._accuracy[-1]:.4f}", end=' ')
+
+			### NON CONCERNE
 			vMod.fwdPropagation()
-			self._validCostMatrix = self._lossFunc(vMod.validLayers[-1].activate(), vMod.expectedOutput)
-			self._validcostPerEpoch.append(mlp_utils.epochCost(self._validCostMatrix, vMod.expectedOutput))
+			self._validCost = self._lossFunc(vMod.validLayers[-1].activate(), vMod.expectedOutput)
+			self._validcostPerEpoch.append(mlp_utils.batchCost(self._validCost, vMod.expectedOutput))
 			self._validAccuracy.append(mlp_utils.calculateAccuracy(vMod.validLayers[-1].activate(), vMod.expectedOutput))
 			if (verbose is True):
 				print(f"| validCost = {self._validcostPerEpoch[-1]:.4f} | validAccuracy = {self._validAccuracy[-1]:.4f}")
-			self.__backPropagation()
+			###
+
 			shufInputs = self._layers[0].nodes
 			shufOutput = self._expectedOutput
 			(self._layers[0].nodes, self._expectedOutput) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)
 			self._layers[0]._activate = self._layers[0].nodes
 		return self
+
+	def useModel(self, testData: tuple[list, list]) -> tuple[float, float]:
+
+		testInputs = testData[0]
+		testOutputs = testData[1]
+		assert len(testInputs[0]) == self._layers[0].size()
+		assert len(testOutputs[0]) == self._layers[-1].size()
+
+		vMod = self.__validation(self, testInputs, testOutputs)
+		vMod.fwdPropagation()
+		testCost = self._lossFunc(vMod.validLayers[-1].activate(), vMod.expectedOutput)
+		cost = mlp_utils.batchCost(testCost, vMod.expectedOutput)
+		acc = mlp_utils.calculateAccuracy(vMod.validLayers[-1].activate(), vMod.expectedOutput)
+
+		# for tup in zip(vMod.validLayers[-1].activate(), vMod.expectedOutput):
+		# 	predict = tup[0]
+		# 	expPredict = tup[1]
+		# 	idx = False
+		# 	if (expPredict[1] > expPredict[0]):
+		# 		idx = True
+		# 	if (predict[int(idx)] > predict[int(not(idx))]):
+		# 		idx = True
+		# 	else:
+		# 		idx = False
+
+		# 	print(f"[{tup[0][0]:.2f}, {tup[0][1]:.2f}], {tup[1]}", idx)
+
+		return (cost, acc)
+
+	def exportModel(self) -> dict[str, list]:
+
+		to_export = {
+			'layer': [lay.size() for lay in self._layers],
+			'weight': self._interLayerMatrix,
+			'inputShape': [len(self._trainInputs[0])],
+			'class': [len(self._trainOutputs[0])]
+		}
+
+		# to_export['layers'] = [lay.size() for lay in self._layers]
+		# to_export['weight'] = self._interLayerMatrix
+		# to_export['inputShape'] = [len(self._trainInputs[0])]
+		# to_export['class'] = [len(self._trainOutputs[0])]
+
+		return to_export
 
 	def layers(self):
 		return self._layers
