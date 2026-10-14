@@ -3,19 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
-from model import model, layer
-from parser import Parser
-
-def createExpectedOutput(rawOutput: list):
-	ret = []
-	for x in rawOutput:
-		if (x == 'M'):
-			ret.append([1, 0])
-		elif (x == 'B'):
-			ret.append([0, 1])
-		else:
-			raise AssertionError(f"Invalid output : {x}, should be 'B' or 'M'")
-	return ret
+from training.model import model, layer
+from utils.parser import Parser
 
 def main():
 	try:
@@ -33,13 +22,25 @@ def main():
 
 		#-----------------------Training----------------------
 
-		data = np.load('mlp_data.npy', allow_pickle=True)
+		data = np.load('data/mlp_data.npy', allow_pickle=True)
 
 		data = data.item()
 
 		trainData : tuple = data['train']
 		validData : tuple = data['valid']
 		# testData : tuple = data['test']
+
+		# expOutput = trainData[1]
+		# totB = 0
+		# totM = 0
+		# for i in expOutput:
+		# 	if i[0] > i[1]:
+		# 		totB += 1
+		# 	else:
+		# 		totM += 1
+		# print(totB, totM)
+		# print(np.sum(expOutput, axis=0))
+		# return
 
 		laySize = args['layer']
 		laySize.append(len(trainData[1][0]))
@@ -85,11 +86,11 @@ def main():
 		plt.savefig("accuracy.png")
 
 		#-----------------------------------------------------
-		np.save("mlp", mlp.exportModel())
+		np.save("data/mlp", mlp)
 
-	except Exception as AE:
-		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
-		exit(1)
+	# except Exception as AE:
+	# 	print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
+	# 	exit(1)
 
 	except KeyboardInterrupt:
 		print("\nKeyboard Interuption", file=sys.stderr)

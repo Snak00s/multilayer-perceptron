@@ -43,6 +43,7 @@ class layer:
 		self._idx = 0
 		self._size = 0
 		self.nodes = []
+		self.bias = []
 		self._prevMatrix = None
 		self._nextMatrix = None
 		self._prevLayer = None
@@ -61,6 +62,7 @@ class layer:
 		obj = cls()
 		obj._size = size
 		obj.nodes = [0 for _ in range(size)]
+		obj.bias = [1 for _ in range(size)]
 		match activation:
 			case 'sigmoid':
 				obj.activFunc = obj.sigmoid
@@ -165,6 +167,7 @@ class model:
 			if layer.prevLayer() is not None:
 				layer._delta = self.__delta(layer)
 				layer._prevMatrix -= (self._learningRate / self._sampleAmount * (layer._delta.T @ layer.prevLayer().activate()))
+				layer.bias -= (self._learningRate / self._sampleAmount * np.sum(layer._delta, axis=0))
 		return self
 
 	def __forwardPropagation(self):
@@ -174,11 +177,11 @@ class model:
 			if layer.idx() == 1:
 				for i in range(self._sampleAmount):
 					layerInput = layer.prevLayer().nodes[i]
-					layer.nodes[i] = np.array([layerInput @ layer.prevMatrix()[j] + 1 for j in range(layer.size())])
+					layer.nodes[i] = np.array([layerInput @ layer.prevMatrix()[j] + layer.bias[j] for j in range(layer.size())])
 			else:
 				layerInput = layer.prevLayer().activFunc()
 				for i in range(self._sampleAmount):
-					layer.nodes[i] = np.array([layerInput[i] @ layer.prevMatrix()[g] + 1 for g in range(layer.size())])
+					layer.nodes[i] = np.array([layerInput[i] @ layer.prevMatrix()[g] + layer.bias[g] for g in range(layer.size())])
 		self._layers[-1].activFunc()
 		return self
 
@@ -193,11 +196,11 @@ class model:
 				if layer.idx() == 1:
 					for i in range(self.validSampleAmount):
 						layerInput = layer.prevLayer().nodes[i]
-						layer.nodes[i] = np.array([(layerInput @ layer.prevMatrix()[j]) + 1 for j in range(layer.size())])
+						layer.nodes[i] = np.array([(layerInput @ layer.prevMatrix()[j]) + layer.bias[j] for j in range(layer.size())])
 				else:
 					layerInput = layer.prevLayer().activFunc()
 					for i in range(self.validSampleAmount):
-						layer.nodes[i] = np.array([(layerInput[i] @ layer.prevMatrix()[g]) + 1 for g in range(layer.size())])
+						layer.nodes[i] = np.array([(layerInput[i] @ layer.prevMatrix()[g]) + layer.bias[g] for g in range(layer.size())])
 			self.validLayers[-1].activFunc()
 			return self
 
@@ -210,6 +213,12 @@ class model:
 				actualLayer._nextLayer = self.validLayers[actualLayer._idx + 1]
 			return self
 
+		def updateBias(self, layers: list[layer]) -> None:
+			for i in range(len(self.validLayers)):
+				self.validLayers[i].bias = layers[i].bias
+			return
+
+
 		def __init__(self, mod: model, inputs: list, expOutputs: list):
 
 			self.validWeightMatrix = mod._interLayerMatrix
@@ -217,10 +226,11 @@ class model:
 			self.validLayers = []
 			for i in range(len(tempLayers)):
 				self.validLayers.append(layer.createLayer(tempLayers[i].size(), tempLayers[i].activFunc.__name__))
-			for lay in zip(range(len(self.validLayers)), self.validLayers):
-				lay[1]._idx = lay[0]
-			for lay in self.validLayers:
-				self.linkLayers(lay)
+				self.validLayers[i]._idx = i
+				self.validLayers[i].bias = tempLayers[i].bias
+				if (i > 0):
+					self.linkLayers(self.validLayers[i - 1])
+			self.linkLayers(self.validLayers[-1])
 			inputs = np.array(inputs)
 			self.validLayers[0].nodes = inputs
 			self.validLayers[0]._activate = inputs.copy()
@@ -288,6 +298,8 @@ class model:
 		self._learningRate = learningRate
 		self._costPerEpoch = []
 		self._accuracy = []
+		if (batchSize > len(self._trainInputs)):
+			batchSize = len(self._trainInputs)
 		vMod = self.__validation(self, validData[0], validData[1])
 		for i in range(epoch):
 			batchCost = []
@@ -310,6 +322,7 @@ class model:
 				print(f"epoch {i + 1} / {epoch} | cost = {self._costPerEpoch[-1]:.4f} | accuracy = {self._accuracy[-1]:.4f}", end=' ')
 
 			### NON CONCERNE
+			vMod.updateBias(self._layers)
 			vMod.fwdPropagation()
 			self._validCost = self._lossFunc(vMod.validLayers[-1].activate(), vMod.expectedOutput)
 			self._validcostPerEpoch.append(mlp_utils.batchCost(self._validCost, vMod.expectedOutput))
@@ -322,6 +335,7 @@ class model:
 			shufOutput = self._expectedOutput
 			(self._layers[0].nodes, self._expectedOutput) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)
 			self._layers[0]._activate = self._layers[0].nodes
+		# print(self._layers[1].bias)
 		return self
 
 	def useModel(self, testData: tuple[list, list]) -> tuple[float, float]:
