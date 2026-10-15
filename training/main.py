@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
+from pathlib import Path
 
 from training.model import model, layer
 from utils.parser import Parser
@@ -28,19 +29,6 @@ def main():
 
 		trainData : tuple = data['train']
 		validData : tuple = data['valid']
-		# testData : tuple = data['test']
-
-		# expOutput = trainData[1]
-		# totB = 0
-		# totM = 0
-		# for i in expOutput:
-		# 	if i[0] > i[1]:
-		# 		totB += 1
-		# 	else:
-		# 		totM += 1
-		# print(totB, totM)
-		# print(np.sum(expOutput, axis=0))
-		# return
 
 		laySize = args['layer']
 		laySize.append(len(trainData[1][0]))
@@ -58,14 +46,13 @@ def main():
 				trainData=trainData,
 				validData=validData,
 				learningRate=args['learning_rate'][0],
+				lossFunc=args['loss'][0],
 				batchSize=args['batch_size'][0],
 				epoch=args['epochs'][0],
 				verbose=True
 			)
 
 		#-----------------------------------------------------
-
-		# mlp.useModel(testData=testData)
 
 		plt.figure()
 		plt.plot(np.array(mlp.costPerEpoch()))
@@ -86,11 +73,14 @@ def main():
 		plt.savefig("accuracy.png")
 
 		#-----------------------------------------------------
-		np.save("data/mlp", mlp)
 
-	# except Exception as AE:
-	# 	print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
-	# 	exit(1)
+		path = Path("data/mlp.npy")
+		path.parent.mkdir(parents=True, exist_ok=True)
+		np.save(path, mlp)
+
+	except Exception as AE:
+		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
+		exit(1)
 
 	except KeyboardInterrupt:
 		print("\nKeyboard Interuption", file=sys.stderr)
