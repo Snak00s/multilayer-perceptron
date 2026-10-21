@@ -179,7 +179,7 @@ class model:
 			if layer.prevLayer() is not None:
 				layer._delta = self.__delta(layer)
 				layer._prevMatrix -= (self._learningRate / self._sampleAmount * (layer._delta.T @ layer.prevLayer().activate()))
-				layer.bias -= (self._learningRate / self._sampleAmount * np.sum(layer._delta, axis=0))
+				layer.bias -= ((self._learningRate / self._sampleAmount) * np.sum(layer._delta, axis=0))
 		return self
 
 	def __forwardPropagation(self):
@@ -229,7 +229,6 @@ class model:
 			for i in range(len(self.validLayers)):
 				self.validLayers[i].bias = layers[i].bias
 			return
-
 
 		def __init__(self, mod: model, inputs: list, expOutputs: list):
 
