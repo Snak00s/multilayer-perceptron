@@ -52,7 +52,7 @@ def main():
 				batchSize=args['batch_size'][0],
 				epoch=args['epochs'][0],
 				verbose=True,
-				earlyStopping=(5, 0.01)
+				earlyStopping=(5, 0.005)
 			)
 
 		#-----------------------------------------------------

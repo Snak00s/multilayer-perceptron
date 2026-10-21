@@ -103,10 +103,10 @@ class _NesMomentum:
 	def update_velocity(self, batchSize: int):
 		for i in range(len(self._weightVelocity)):
 			self._weightVelocity[i] *= self._factor
-			self._weightVelocity[i] += (self._lr / batchSize) * (self._layers[i+1]._delta.T @ self._layers[i+1].prevLayer().activate()) #maybe -
+			self._weightVelocity[i] += self._lr * self._layers[i+1]._wGrad #maybe -
 
 			self._biasVelocity[i] *= self._factor
-			self._biasVelocity[i] += (self._lr / batchSize) * np.sum(self._layers[i+1]._delta, axis=0)
+			self._biasVelocity[i] += self._lr * self._layers[i+1]._bGrad
 		return
 
 	def update_trueParam(self):
@@ -199,6 +199,8 @@ class layer:
 		self._activate = None
 		self._sampleAmount = 0
 		self._delta = None
+		self._wGrad = None
+		self._bGrad = None
 		return
 
 	@classmethod
@@ -318,8 +320,11 @@ class model:
 			layer._delta = self._delta(layer)
 		for layer in reversed(self._layers):
 			if layer.prevLayer() is not None:
-				layer._weightMatrix -= (self._learningRate / self._sampleAmount * (layer._delta.T @ layer.prevLayer().activate()))
-				layer.bias -= ((self._learningRate / self._sampleAmount) * np.sum(layer._delta, axis=0))
+				layer._wGrad = layer._delta.T @ layer.prevLayer().activate() / self._sampleAmount
+				layer._weightMatrix -= self._learningRate * layer._wGrad
+
+				layer._bGrad = np.sum(layer._delta, axis=0) / self._sampleAmount
+				layer.bias -= self._learningRate * layer._bGrad
 		return
 
 	def forwardPropagation(self):
