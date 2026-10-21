@@ -63,6 +63,7 @@ class _NesMomentum:
 
 	_layers: list[layer]
 	_weightMatrixs: list[np.ndarray]
+	_biasMatrixs: list[np.ndarray]
 	_refMod: model
 
 	def __init__(self, mod: model, factor: float):
@@ -72,11 +73,12 @@ class _NesMomentum:
 
 		self._layers = mod._layers
 		self._weightMatrixs = mod._weightMatrixs
+		self._biasMatrixs = mod._biasMatrixs
 
 		self._dirWeight = [weight.copy() for weight in mod._weightMatrixs]
 		self._weightVelocity = [np.zeros(self._dirWeight[i].shape, dtype=np.float64) for i in range(len(self._dirWeight))]
 
-		self._dirBias = [mod.layers()[i].bias.copy() for i in range(len(mod.layers()))]
+		self._dirBias = [mod.layers()[i].bias.copy() for i in range(1,len(mod.layers()))]
 		self._biasVelocity = [np.zeros(self._dirBias[i].shape, dtype=np.float64) for i in range(len(self._dirBias))]
 
 		self.linkLayersToDir()
@@ -84,15 +86,18 @@ class _NesMomentum:
 		return
 
 	def linkLayersToDir(self):
-		for i in range(len(self._layers)):
-			if (i > 0):
-				self._layers[i]._weightMatrix = self._dirWeight[i - 1]
+		for i in range(1, len(self._layers)):
+			self._layers[i]._weightMatrix = self._dirWeight[i-1]
+			self._layers[i].bias = self._dirBias[i-1]
 		return
 
 	def update_dirParam(self):
 		for i in range(len(self._dirWeight)):
 			self._dirWeight[i] = self._weightMatrixs[i] - self._factor * self._weightVelocity[i] #maybe +
 			self._layers[i+1]._weightMatrix = self._dirWeight[i]
+
+			self._dirBias[i] = self._biasMatrixs[i] - self._factor * self._biasVelocity[i]
+			self._layers[i+1].bias = self._dirBias[i]
 		return
 
 	def update_velocity(self, batchSize: int):
@@ -100,21 +105,24 @@ class _NesMomentum:
 			self._weightVelocity[i] *= self._factor
 			self._weightVelocity[i] += (self._lr / batchSize) * (self._layers[i+1]._delta.T @ self._layers[i+1].prevLayer().activate()) #maybe -
 
-			# self._biasVelocity[i+1] *= self._factor
-			# self._biasVelocity[i+1] += (self._lr / batchSize) * np.sum(self._layers[i+1]._delta, axis=0)
+			self._biasVelocity[i] *= self._factor
+			self._biasVelocity[i] += (self._lr / batchSize) * np.sum(self._layers[i+1]._delta, axis=0)
 		return
 
 	def update_trueParam(self):
 		for i in range(len(self._weightMatrixs)):
 			self._weightMatrixs[i] -= self._weightVelocity[i] #maybe +
-			# self._layers[i+1].bias -= self._biasVelocity[i+1]
+			self._biasMatrixs[i] -= self._biasVelocity[i]
+
+			self._layers[i+1]._weightMatrix = self._weightMatrixs[i]
+			self._layers[i+1].bias = self._biasMatrixs[i]
 		return
 
 	def routine(self):
-		self.update_dirParam()						#NESMOM
+		self.update_dirParam()
 		(co, acc) = self._refMod.routine()
-		self.update_velocity(self._refMod._sampleAmount)	#NESMOM
-		self.update_trueParam()					#NESMOM
+		self.update_velocity(self._refMod._sampleAmount)
+		self.update_trueParam()
 		return (co, acc)
 
 class _validation:
@@ -185,7 +193,7 @@ class layer:
 		self._size = 0
 		self.nodes = np.array([], dtype=np.float64)
 		self.bias = np.array([], dtype=np.float64)
-		self._weightMatrix = None
+		self._weightMatrix = np.array([], dtype=np.float64)
 		self._prevLayer = None
 		self._nextLayer = None
 		self._activate = None
@@ -201,7 +209,6 @@ class layer:
 		obj = cls()
 		obj._size = size
 		obj.nodes = np.array([0 for _ in range(size)], dtype=np.float64)
-		obj.bias = np.array([1 for _ in range(size)], dtype=np.float64)
 		match activation:
 			case 'sigmoid':
 				obj.activFunc = obj.sigmoid
@@ -249,6 +256,7 @@ class model:
 	def __init__(self):
 		self._layers = []
 		self._weightMatrixs = []
+		self._biasMatrixs = []
 		self._expectedOutput = []
 		self._trainOutputs = []
 		self._trainInputs = []
@@ -272,11 +280,12 @@ class model:
 		obj = cls()
 		obj._layers = layerList
 		obj._weightMatrixs = [obj.__createInterLayerMatrix(layerList[x].size(), layerList[x + 1].size()) for x in range(len(layerList) - 1)]
+		obj._biasMatrixs = [np.array([1 for _ in range(layerList[x].size())], dtype=np.float64) for x in range(1, len(layerList))]
 		for lay in zip(range(len(obj._layers)), obj._layers):
 			lay[1]._idx = lay[0]
 
 		for lay in obj._layers:
-			obj.__linkLayers(lay, obj._weightMatrixs)
+			obj.__linkLayers(lay, obj._weightMatrixs, obj._biasMatrixs)
 		obj._lossFunc = mlp_utils.categoricalCrossentropy
 		return obj
 
@@ -286,9 +295,10 @@ class model:
 		downLim = - np.sqrt(6 / prevLayerSize)
 		return np.array([[random.uniform(downLim, upLim) for _ in range(prevLayerSize)] for _ in range(actualLayerSize)])
 
-	def __linkLayers(self, actualLayer: layer, weightMatrix: list):
+	def __linkLayers(self, actualLayer: layer, weightMatrix: list, biasMatrix: list):
 		if (actualLayer._idx > 0):
 			actualLayer._weightMatrix = weightMatrix[actualLayer._idx - 1]
+			actualLayer.bias = biasMatrix[actualLayer._idx - 1]
 			actualLayer._prevLayer = self._layers[actualLayer._idx - 1]
 		if (actualLayer._idx < len(weightMatrix)):
 			actualLayer._nextLayer = self._layers[actualLayer._idx + 1]
@@ -325,7 +335,7 @@ class model:
 	def routine(self):
 			self.forwardPropagation()					#feedforward
 			costMatrix = self._lossFunc(self._layers[-1].activate(), self._expectedOutput)
-			self.backPropagation()					#bacpropagation to learn on every batch
+			self.backPropagation()						#bacpropagation to learn on every batch
 			return (mlp_utils.batchCost(costMatrix, self._expectedOutput),
 					mlp_utils.calculateAccuracy(self._layers[-1].activate(), self._expectedOutput))
 

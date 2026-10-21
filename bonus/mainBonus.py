@@ -51,8 +51,8 @@ def main():
 				lossFunc=args['loss'][0],
 				batchSize=args['batch_size'][0],
 				epoch=args['epochs'][0],
-				verbose=True
-				# earlyStopping=(5, 0.01)
+				verbose=True,
+				earlyStopping=(5, 0.01)
 			)
 
 		#-----------------------------------------------------
@@ -81,9 +81,9 @@ def main():
 		path.parent.mkdir(parents=True, exist_ok=True)
 		np.save(path, mlp)
 
-	# except Exception as AE:
-	# 	print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
-	# 	exit(1)
+	except Exception as AE:
+		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
+		exit(1)
 
 	except KeyboardInterrupt:
 		print("\nKeyboard Interuption", file=sys.stderr)
