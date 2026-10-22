@@ -12,6 +12,11 @@ class confMatrix:
 		self.clas = clas
 		self.matrix = np.zeros((clas, clas), dtype=int)
 		self.classList = np.identity(clas, dtype=int)
+		return
+
+	def clear(self):
+		self.matrix = np.zeros((self.clas, self.clas), dtype=int)
+		return
 
 	def __compute_to_class(self, matrix):
 		arr = np.array(matrix)
@@ -311,6 +316,7 @@ class model:
 	_trainInputs: list[float]
 	_lossFunc: function
 	_weightMatrixs: list[np.ndarray]
+	_confMatrix: confMatrix
 
 	def __init__(self):
 		self._layers = []
@@ -331,6 +337,9 @@ class model:
 		self._bestCost = sys.maxsize
 		self._patience = 0
 		self._minEcart = 0.0
+		self._precision = []
+		self._recall = []
+		self._f1_score = []
 		return
 
 	@classmethod
@@ -346,6 +355,9 @@ class model:
 		for lay in obj._layers:
 			obj.__linkLayers(lay, obj._weightMatrixs, obj._biasMatrixs)
 		obj._lossFunc = mlp_utils.categoricalCrossentropy
+
+		#Bonus
+		obj._confMatrix = confMatrix(layerList[-1].size())
 		return obj
 
 	@staticmethod
@@ -510,6 +522,11 @@ class model:
 			batchCost = []
 			batchAcc = []
 			samplePerBatch = []
+			precision_0 = []
+			precision_1 = []
+			recall_0 = []
+			recall_1 = []
+
 
 			step = int(0)
 			while step != -1: #loop over all dataset following the batchsize step
@@ -518,9 +535,26 @@ class model:
 				(co, acc) = routine.routine()
 				batchCost.append(co)
 				batchAcc.append(acc)
+				#BONUS
+				for j in range(len(self._layers[-1].activate())):
+					self._confMatrix.compute_result(self._layers[-1].activate()[j], self._expectedOutput[j])
+				TP = (self._confMatrix.TP_class(0), self._confMatrix.TP_class(1))
+				FP = (self._confMatrix.FP_class(0), self._confMatrix.FP_class(1))
+				FN = (self._confMatrix.FN_class(0), self._confMatrix.FP_class(1))
+				precision_0.append(TP[0] / (TP[0] + FP[0]))
+				precision_1.append(TP[1] / (TP[1] + FP[1]))
+				recall_0.append(TP[0] / (TP[0] + FN[0]))
+				recall_1.append(TP[1] / (TP[1] + FN[1]))
+				######
 
 			self._costPerEpoch.append(mlp_utils.ponderate(batchCost, samplePerBatch))	#ponderate all batch cost to define the epoch cost
 			self._accuracy.append(mlp_utils.ponderate(batchAcc, samplePerBatch))		#same for acc
+			#BONUS
+			self._precision.append((mlp_utils.ponderate(precision_0, samplePerBatch) + mlp_utils.ponderate(precision_1, samplePerBatch)) / 2)
+			self._recall.append((mlp_utils.ponderate(recall_0, samplePerBatch) + mlp_utils.ponderate(recall_1, samplePerBatch)) / 2)
+			self._f1_score.append(2 * (self._precision[-1] * self._recall[-1]) / (self._precision[-1] + self._recall[-1]))
+			######
+			
 			if (verbose is True):
 				print(f"epoch {i + 1} / {epoch} | cost = {self._costPerEpoch[-1]:.4f} | accuracy = {self._accuracy[-1]:.4f}", end=' ')
 
@@ -580,3 +614,12 @@ class model:
 
 	def validCostPerEpoch(self):
 		return self._validcostPerEpoch
+
+	def precision(self):
+		return self._precision
+
+	def recall(self):
+		return self._recall
+
+	def f1_score(self):
+		return self._f1_score

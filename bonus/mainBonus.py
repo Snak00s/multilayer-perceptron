@@ -8,36 +8,36 @@ from bonus.modelBonus import model, layer, confMatrix
 from utils.parser import Parser
 
 def main():
-	test = confMatrix(3)
+	# test = confMatrix(3)
 
-	classes = [
-		[1, 0, 0],
-		[0, 1, 0],
-		[0, 0, 1]
-		]
+	# classes = [
+	# 	[1, 0, 0],
+	# 	[0, 1, 0],
+	# 	[0, 0, 1]
+	# 	]
 
-	expected = []
-	predicted = []
-	for _ in range(100):
-		r = np.random.randint(0, 3)
-		expected.append(classes[r])
-		r = np.random.random(3)
-		# normalized = np.zeros_like(r, dtype=int)
-		# normalized[np.argmax(r)] = 1
-		predicted.append(r)
+	# expected = []
+	# predicted = []
+	# for _ in range(100):
+	# 	r = np.random.randint(0, 3)
+	# 	expected.append(classes[r])
+	# 	r = np.random.random(3)
+	# 	# normalized = np.zeros_like(r, dtype=int)
+	# 	# normalized[np.argmax(r)] = 1
+	# 	predicted.append(r)
 
-	for i in range(len(predicted)):
-		test.compute_result(predicted[i], expected[i])
+	# for i in range(len(predicted)):
+	# 	test.compute_result(predicted[i], expected[i])
 
-	print(test.matrix)
+	# print(test.matrix)
 
-	# print(np.delete(np.delete(test.matrix, 1, 0), 1, 1))
-	print(test.TP())
-	print(test.TN())
-	print(test.FP())
-	print(test.FN())
+	# # print(np.delete(np.delete(test.matrix, 1, 0), 1, 1))
+	# print(test.TP())
+	# print(test.TN())
+	# print(test.FP())
+	# print(test.FN())
 
-	return
+	# return
 	try:
 		# -----------------------Parsing----------------------
 
@@ -99,6 +99,8 @@ def main():
 
 		#-----------------------------------------------------
 
+		print(mlp._confMatrix.matrix)
+
 		plt.figure()
 		plt.plot(np.array(mlp.costPerEpoch()))
 		plt.plot(np.array(mlp.validCostPerEpoch()))
@@ -116,6 +118,37 @@ def main():
 		plt.ylabel("Accuracy")
 		plt.legend(['Train accuracy', 'Validation accuracy'])
 		plt.savefig("accuracy.png")
+
+		plt.figure()
+		plt.plot(np.array(mlp.precision()))
+		plt.plot(np.array(mlp.recall()))
+		plt.plot(np.array(mlp.f1_score()))
+		plt.title("TA MERE")
+		plt.xlabel("epoch")
+		plt.ylabel("Shit")
+		plt.legend(['Precision', 'Recall', 'F1_score'])
+		plt.savefig("tamere.png")
+
+		# plt.figure()
+		# plt.plot(np.array(mlp.precision()))
+		# plt.title("Precision")
+		# plt.xlabel("epoch")
+		# plt.ylabel("precision")
+		# plt.savefig("precision.png")
+		
+		# plt.figure()
+		# plt.plot(np.array(mlp.recall()))
+		# plt.title("Recall")
+		# plt.xlabel("epoch")
+		# plt.ylabel("recall")
+		# plt.savefig("recall.png")
+
+		# plt.figure()
+		# plt.plot(np.array(mlp.f1_score()))
+		# plt.title("F1_SCORE")
+		# plt.xlabel("epoch")
+		# plt.ylabel("F1_score")
+		# plt.savefig("f1_score.png")
 
 		#-----------------------------------------------------
 
