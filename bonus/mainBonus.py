@@ -4,12 +4,40 @@ import numpy as np
 import sys
 from pathlib import Path
 
-from bonus.modelBonus import model, layer
+from bonus.modelBonus import model, layer, confMatrix
 from utils.parser import Parser
 
-#faut ajouter le NesMomentum du bias et sauvegardé le delta
-
 def main():
+	test = confMatrix(3)
+
+	classes = [
+		[1, 0, 0],
+		[0, 1, 0],
+		[0, 0, 1]
+		]
+
+	expected = []
+	predicted = []
+	for _ in range(100):
+		r = np.random.randint(0, 3)
+		expected.append(classes[r])
+		r = np.random.random(3)
+		# normalized = np.zeros_like(r, dtype=int)
+		# normalized[np.argmax(r)] = 1
+		predicted.append(r)
+
+	for i in range(len(predicted)):
+		test.compute_result(predicted[i], expected[i])
+
+	print(test.matrix)
+
+	# print(np.delete(np.delete(test.matrix, 1, 0), 1, 1))
+	print(test.TP())
+	print(test.TN())
+	print(test.FP())
+	print(test.FN())
+
+	return
 	try:
 		# -----------------------Parsing----------------------
 
@@ -20,6 +48,8 @@ def main():
 		parser.add_arg("loss", ammount=1, argType=str)
 		parser.add_arg("learning_rate", ammount=1, argType=float)
 		parser.add_arg("batch_size", ammount=1, argType=int)
+		parser.add_arg("optimizer", ammount=1, argType=str, optionnal=True)
+		parser.add_arg("early_stop", ammount=1, argType=tuple, optionnal=True)
 
 		args = parser.parse_args()
 
@@ -29,8 +59,8 @@ def main():
 
 		data = data.item()
 
-		trainData : tuple = data['train']
-		validData : tuple = data['valid']
+		trainData: tuple = data['train']
+		validData: tuple = data['valid']
 
 		laySize = args['layer']
 		laySize.append(len(trainData[1][0]))
@@ -44,6 +74,17 @@ def main():
 			for i in range(len(laySize))
 			])
 
+		#Optimizer setting (Bonus)
+		optimizer = ''
+		if (args.get('optimizer')):
+			optimizer = args['optimizer'][0]
+
+		#Early Stop setting (Bonus)
+		earlyStop = (int(0), float(0))
+		if (args.get('early_stop')):
+			earlyStop = args['early_stop'][0]
+			earlyStop = (int(earlyStop[0]), float(earlyStop[1]))
+
 		mlp.fit(
 				trainData=trainData,
 				validData=validData,
@@ -52,7 +93,8 @@ def main():
 				batchSize=args['batch_size'][0],
 				epoch=args['epochs'][0],
 				verbose=True,
-				earlyStopping=(5, 0.005)
+				optimizer=optimizer,
+				earlyStopping=earlyStop
 			)
 
 		#-----------------------------------------------------
@@ -77,9 +119,15 @@ def main():
 
 		#-----------------------------------------------------
 
-		path = Path("data/mlp.npy")
-		path.parent.mkdir(parents=True, exist_ok=True)
-		np.save(path, mlp)
+		model_path = Path("data/mlp.npy")
+		model_path.parent.mkdir(parents=True, exist_ok=True)
+		np.save(model_path, mlp)
+
+		# pd.DataFrame({'Epochs': [i+1 for i in range(len(mlp.costPerEpoch()))],
+		# 			  'Cost_T': mlp.costPerEpoch(),
+		# 			  'Acc_T': mlp.accuracy(),
+		# 			  'Cost_V': mlp.validCostPerEpoch(),
+		# 			  'Acc_V': mlp.validAccuracy()}).set_index('Epochs').to_csv("modelsDataFrame.csv")
 
 	except Exception as AE:
 		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
@@ -92,3 +140,5 @@ def main():
 
 if __name__ == "__main__":
 	main()
+
+# 'model-CCE-GD-24-24-0.0314.cvs'

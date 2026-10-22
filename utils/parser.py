@@ -14,6 +14,8 @@ class Parser:
 		self._argNarg = dict()
 		self._argType = dict()
 		self._argOpt = dict()
+
+		self._baseType = [type(int()), type(float()), type(str())]
 		pass
 
 	def add_arg(self, argName: str, ammount: int, argType: type[type], optionnal=False):
@@ -31,12 +33,30 @@ class Parser:
 		self._argOpt[argName] = optionnal
 		return self
 
+	def _tuple_parser(self, tup: str):
+		if (tup.startswith('(') and tup.endswith(')')):
+			tup = tup.replace('(', '').replace(')', '').replace(',', '').split()
+		
+
+	def _append_if(self, name: str, val: str):
+		obj = self._argType[name]
+		if obj in self._baseType:
+			self._argDict[name].append(obj(val))
+			return
+		match obj:
+			case t if t is type(tuple()):
+				val = val.lstrip().split(sep=",")
+				assert len(val) == 2, f"argType {obj} missmatch: {val}"
+				self._argDict[name].append(obj(val))
+			case _:
+				raise AssertionError(f"{obj}: invalid type or not managed.")
+		return
+
 	def parse_args(self):
 		"""Will parse argument in sys.argv,
 		it should catch all argument added via 'add_arg()' and respect given limitation"""
 		name = ''
 		obj = int
-
 		for val in sys.argv[1:]:
 			if self._argDict.get(val.strip('-')) is not None:
 				name = val.strip('-')
@@ -44,7 +64,7 @@ class Parser:
 				continue
 
 			if len(self._argDict[name]) < self._argNarg[name]:
-				self._argDict[name].append(obj(val))
+				self._append_if(name, val)
 			else:
 				raise AssertionError(f"{name}: too many value, max={self._argNarg[name]}.")
 
@@ -61,12 +81,6 @@ class Parser:
 		for arg in self._argDict.keys():
 			if (arg != 'default'):
 				self._argDict[arg] = []
-
-	def get_argument_status(self, argName: str):
-		return [self._argDict[argName],
-			(len(self._argDict[argName]), self._argNarg[argName]),
-			self._argType[argName]
-			]
 
 	def parse_str(self, string: str):
 		"""Will parse argument in sys.argv,

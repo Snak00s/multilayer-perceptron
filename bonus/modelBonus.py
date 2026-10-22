@@ -1,7 +1,64 @@
 import numpy as np
 import random
 from dataclasses import dataclass
-from typing import Literal
+import sys
+
+class confMatrix:
+
+	matrix: np.ndarray
+	classList: np.ndarray
+
+	def __init__(self, clas: int):
+		self.clas = clas
+		self.matrix = np.zeros((clas, clas), dtype=int)
+		self.classList = np.identity(clas, dtype=int)
+
+	def __compute_to_class(self, matrix):
+		arr = np.array(matrix)
+		normalized = np.zeros_like(arr)
+		normalized[np.argmax(arr)] = 1
+
+		idx = np.where(np.all(self.classList==normalized, axis=1))
+		
+		return idx
+
+	def compute_result(self, predicted, expected):
+		class_e = self.__compute_to_class(expected)
+		class_p = self.__compute_to_class(predicted)
+
+		self.matrix[class_e, class_p] += 1
+		return
+
+	#True Positive ------------------------------------------------
+	def	TP_class(self, i: int):
+		return self.matrix[i][i]
+
+	def TP(self):
+		return np.sum([self.TP_class(i) for i in range(self.clas)])
+
+	#False Negative -----------------------------------------------
+	def FN_class(self, i: int):
+		return np.sum(self.matrix[i]) - self.TP_class(i)
+
+	def FN(self):
+		return np.sum([self.FN_class(i) for i in range(self.clas)])
+
+	#False Positive -----------------------------------------------
+	def FP_class(self, i):
+		return np.sum(self.matrix[:, i]) - self.TP_class(i)
+
+	def FP(self):
+		return np.sum([self.FP_class(i) for i in range(self.clas)])
+
+	#True Negative ------------------------------------------------
+	def TN_class(self, i):
+		tn = np.delete(self.matrix, i, 0)
+		tn = np.delete(tn, i, 1)
+		return np.sum(tn)
+
+	def TN(self):
+		return np.sum([self.TN_class(i) for i in range(self.clas)])
+
 
 class routine_model:
 	def __init__(self):
@@ -138,10 +195,10 @@ class _validation:
 					layerInput = layer.prevLayer().nodes[i]
 					layer.nodes[i] = np.array([(layerInput @ layer.weightMatrix()[j]) + layer.bias[j] for j in range(layer.size())])
 			else:
-				layerInput = layer.prevLayer().activFunc()
+				layerInput = layer.prevLayer()._activFunc()
 				for i in range(self.validSampleAmount):
 					layer.nodes[i] = np.array([(layerInput[i] @ layer.weightMatrix()[g]) + layer.bias[g] for g in range(layer.size())])
-		self.validLayers[-1].activFunc()
+		self.validLayers[-1]._activFunc()
 		return self
 
 	def linkLayers(self, actualLayer: layer):
@@ -163,7 +220,7 @@ class _validation:
 		tempLayers = mod.layers()
 		self.validLayers = []
 		for i in range(len(tempLayers)):	# copy the layer configuration of the main model
-			self.validLayers.append(layer.createLayer(tempLayers[i].size(), tempLayers[i].activFunc.__name__))
+			self.validLayers.append(layer.createLayer(tempLayers[i].size(), tempLayers[i]._activFunc.__name__))
 			self.validLayers[i]._idx = i
 			self.validLayers[i].bias = tempLayers[i].bias
 			if (i > 0):
@@ -186,7 +243,7 @@ class layer:
 	_prevLayer: layer
 	_nextLayer: layer
 	_delta: np.ndarray
-	activFunc: function
+	_activFunc: function
 
 	def __init__(self):
 		self._idx = 0
@@ -213,9 +270,9 @@ class layer:
 		obj.nodes = np.array([0 for _ in range(size)], dtype=np.float64)
 		match activation:
 			case 'sigmoid':
-				obj.activFunc = obj.sigmoid
+				obj._activFunc = obj.sigmoid
 			case 'softmax':
-				obj.activFunc = obj.softmax
+				obj._activFunc = obj.softmax
 			case _:
 				raise AssertionError(f"Invalid activation function: {activation}")
 		return obj
@@ -271,7 +328,7 @@ class model:
 		self._validAccuracy = []
 
 		#Early Stopping
-		self._bestCost = 100
+		self._bestCost = sys.maxsize
 		self._patience = 0
 		self._minEcart = 0.0
 		return
@@ -331,10 +388,10 @@ class model:
 		for lay in self._layers:
 			if lay.idx() == 0:	#should not apply any activation on the input layer
 				continue
-			layerInput = lay.prevLayer().nodes if lay.idx() == 1 else lay.prevLayer().activFunc()
+			layerInput = lay.prevLayer().nodes if lay.idx() == 1 else lay.prevLayer()._activFunc()
 			for i in range(self._sampleAmount):
 				lay.nodes[i] = np.array([layerInput[i] @ lay.weightMatrix()[g] + lay.bias[g] for g in range(lay.size())])
-		self._layers[-1].activFunc()
+		self._layers[-1]._activFunc()
 		return
 
 	def routine(self):
@@ -383,12 +440,12 @@ class model:
 	def fit(self,
 	        trainData: tuple[np.ndarray],
 			validData: tuple[np.ndarray],
-			learningRate: float=0.0314,
-			lossFunc: str='categoricalCrossentropy',
-			batchSize: int=1,
-			epoch: int=100,
+			learningRate: float,
+			lossFunc: str,
+			batchSize: int,
+			epoch: int,
+			optimizer: str='',
 			verbose: bool=False,
-			optimization: str='NesterovMomentum',
 			earlyStopping: tuple=(int(0), float(0)) # tuple['patience': int, 'minEcart':float]
 		):
 		"""Train the model on the given 'trainData=(tInputs, tOutputs)' and check validation with 'validData(vInputs, vOutputs)' for 'epoch' amount of time.
@@ -398,7 +455,7 @@ class model:
 		- bathSize - (0 <= batchSize <= len(inputs)) - change the way the model use the data, if 0, it will take the whole tInputs len as value.
 		- epoch - (0 < epoch < inf) - determine the amount of time the model will train on the given data.
 		- verbose - (True/False), show the evolution epoch per epoch.
-		- optimization - 'GradientDescent'/'NesterovMomentum', training method choosing.
+		- optimizer - 'GradientDescent'/'NesterovMomentum', training method choosing.
 		- earlyStopping - (int > 0, float > 0.0), set a learning stop condition to avoid overfitting
 		"""
 		assert len(trainData[0]) == len(trainData[1]) and len(validData[0]) == len(validData[1]), "(Inputs, Outputs) len missmatch."
@@ -427,7 +484,7 @@ class model:
 
 		#Routine setting -------------------------------------------------------------
 		routine : routine_model
-		match optimization:
+		match optimizer:
 			case 'NesterovMomentum':
 				routine = _NesMomentum(self, 0.9)
 			case 'GradientDescent':
@@ -435,7 +492,7 @@ class model:
 			case '':
 				routine = self
 			case _:
-				raise AssertionError(f'Invalid training method: {lossFunc}')
+				raise AssertionError(f'Invalid training method: {optimizer}')
 
 		#Early stopping setting ------------------------------------------------------
 		apply_ES = False

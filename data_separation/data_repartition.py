@@ -35,9 +35,6 @@ def main():
 		assert len(args['dataset']) == 1
 
 		data = pd.read_csv(args['dataset'][0], header=None).reset_index(drop="True")
-		# b = data.loc[data[1] == 'B'].sample(frac=1)
-		# m = data.loc[data[1] == 'M'].sample(frac=1)
-		# data = data.drop(M.index)
 		data_prcB = (count_occurence(data[1], 'B') / len(data[1])) * 100
 		data = data.sample(frac=1)
 		tLen = int(len(data) * 0.8)
@@ -60,7 +57,7 @@ def main():
 		validOutputs = np.array(createExpectedOutput(validRows[:, 1:2]))
 
 		testRows = data.iloc[tLen + vLen:]
-		te_prcB = (count_occurence(testRows[1], 'B') / len(testRows[1])) * 100
+		# te_prcB = (count_occurence(testRows[1], 'B') / len(testRows[1])) * 100
 		testRows = np.array(data.iloc[tLen + vLen:])
 
 		testInputs = np.array(testRows[:, 2:], dtype=np.float64)
@@ -72,6 +69,7 @@ def main():
 			'valid': (validInputs, validOutputs),
 			'test': (testInputs, testOutputs)
 			}
+
 		path = Path("data/mlp_data.npy")
 		path.parent.mkdir(parents=True, exist_ok=True)
 		np.save(path, arrDict)
