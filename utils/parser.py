@@ -56,17 +56,19 @@ class Parser:
 		"""Will parse argument in sys.argv,
 		it should catch all argument added via 'add_arg()' and respect given limitation"""
 		name = ''
-		obj = int
+		# obj = int
 		for val in sys.argv[1:]:
 			if self._argDict.get(val.strip('-')) is not None:
 				name = val.strip('-')
-				obj = self._argType[name]
+				# obj = self._argType[name]
 				continue
 
-			if len(self._argDict[name]) < self._argNarg[name]:
+			if name != '' and len(self._argDict[name]) < self._argNarg[name]:
 				self._append_if(name, val)
+			elif name == '':
+				raise AssertionError(f"'{val}': invalid argument.")
 			else:
-				raise AssertionError(f"{name}: too many value, max={self._argNarg[name]}.")
+				raise AssertionError(f"'{name}': too many value, max={self._argNarg[name]}.")
 
 		for arg in self._argDict.keys():
 			if (arg != 'default'):
@@ -115,6 +117,13 @@ class Parser:
 			(len(self._argDict[argName]), self._argNarg[argName]),
 			self._argType[argName]
 			]
+
+	def special_help(self, help_func: function):
+		for val in sys.argv[1:]:
+			if val.strip('-') == 'help':
+				help_func()
+				exit(0)
+		return
 
 
 # def main():

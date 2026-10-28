@@ -7,42 +7,25 @@ from pathlib import Path
 from bonus.modelBonus import model, layer, confMatrix
 from utils.parser import Parser
 
+def help():
+	print("model trainer, this program will train on the given data generated from 'data_separation.data_repartition'.")
+	print("\t--data:\t\t\t'mlp_data.npy' set the training data.")
+	print("\t--layer:\t\tint int int, determine the shape of the model.")
+	print("\t--epochs:\t\tset the ammount of time the model will train on the given data.")
+	print("\t--loss:\t\t\tset the loss function to use (there is only 'categoricalCrossentropy' lol).")
+	print("\t--learning_rate:\tset the learning rate (usualy 0 < lr < 1).")
+	print("\t--batch_size:\t\tset the batch size.")
+	print("\t--optimizer:\t\tset the training algorith; to use.")
+	print("\t--early_stop:\t\t(int, float) with 0 < float < 1, special instruction, will stop the training if the model cost start to converge.")
+	return
+
 def main():
-	# test = confMatrix(3)
-
-	# classes = [
-	# 	[1, 0, 0],
-	# 	[0, 1, 0],
-	# 	[0, 0, 1]
-	# 	]
-
-	# expected = []
-	# predicted = []
-	# for _ in range(100):
-	# 	r = np.random.randint(0, 3)
-	# 	expected.append(classes[r])
-	# 	r = np.random.random(3)
-	# 	# normalized = np.zeros_like(r, dtype=int)
-	# 	# normalized[np.argmax(r)] = 1
-	# 	predicted.append(r)
-
-	# for i in range(len(predicted)):
-	# 	test.compute_result(predicted[i], expected[i])
-
-	# print(test.matrix)
-
-	# # print(np.delete(np.delete(test.matrix, 1, 0), 1, 1))
-	# print(test.TP())
-	# print(test.TN())
-	# print(test.FP())
-	# print(test.FN())
-
-	# return
 	try:
 		# -----------------------Parsing----------------------
 
 		parser = Parser()
-
+		parser.special_help(help)
+		parser.add_arg("data", ammount=1, argType=str)
 		parser.add_arg("layer", ammount=0, argType=int)
 		parser.add_arg("epochs", ammount=1, argType=int)
 		parser.add_arg("loss", ammount=1, argType=str)
@@ -55,7 +38,7 @@ def main():
 
 		#-----------------------Training----------------------
 
-		data = np.load('data/mlp_data.npy', allow_pickle=True)
+		data = np.load(args['data'][0], allow_pickle=True)
 
 		data = data.item()
 
@@ -99,7 +82,10 @@ def main():
 
 		#-----------------------------------------------------
 
-		print(mlp._confMatrix.matrix)
+		path = f"data/{mlp.synthetic_name()}/"
+		model_path = Path(path + "mlp.npy")
+		model_path.parent.mkdir(parents=True, exist_ok=True)
+		np.save(model_path, mlp)
 
 		plt.figure()
 		plt.plot(np.array(mlp.costPerEpoch()))
@@ -108,7 +94,7 @@ def main():
 		plt.xlabel("epoch")
 		plt.ylabel("Cost")
 		plt.legend(['Train cost', 'Validation cost'])
-		plt.savefig("cost.png")
+		plt.savefig(path + "cost.png")
 
 		plt.figure()
 		plt.plot(np.array(mlp.accuracy()))
@@ -117,50 +103,26 @@ def main():
 		plt.xlabel("epoch")
 		plt.ylabel("Accuracy")
 		plt.legend(['Train accuracy', 'Validation accuracy'])
-		plt.savefig("accuracy.png")
+		plt.savefig(path + "accuracy.png")
 
 		plt.figure()
 		plt.plot(np.array(mlp.precision()))
 		plt.plot(np.array(mlp.recall()))
 		plt.plot(np.array(mlp.f1_score()))
-		plt.title("TA MERE")
+		plt.title("F1_score")
 		plt.xlabel("epoch")
-		plt.ylabel("Shit")
+		plt.ylabel("value")
 		plt.legend(['Precision', 'Recall', 'F1_score'])
-		plt.savefig("tamere.png")
+		plt.savefig(path + "f1_score.png")
 
-		# plt.figure()
-		# plt.plot(np.array(mlp.precision()))
-		# plt.title("Precision")
-		# plt.xlabel("epoch")
-		# plt.ylabel("precision")
-		# plt.savefig("precision.png")
-		
-		# plt.figure()
-		# plt.plot(np.array(mlp.recall()))
-		# plt.title("Recall")
-		# plt.xlabel("epoch")
-		# plt.ylabel("recall")
-		# plt.savefig("recall.png")
-
-		# plt.figure()
-		# plt.plot(np.array(mlp.f1_score()))
-		# plt.title("F1_SCORE")
-		# plt.xlabel("epoch")
-		# plt.ylabel("F1_score")
-		# plt.savefig("f1_score.png")
+		plt.figure()
+		plt.plot(np.array(mlp.fpr()), np.array(mlp.tpr()))
+		plt.title("AUC-ROC")
+		plt.xlabel("FPR")
+		plt.ylabel("TPR")
+		plt.savefig(path + "auc-roc.png")
 
 		#-----------------------------------------------------
-
-		model_path = Path("data/mlp.npy")
-		model_path.parent.mkdir(parents=True, exist_ok=True)
-		np.save(model_path, mlp)
-
-		# pd.DataFrame({'Epochs': [i+1 for i in range(len(mlp.costPerEpoch()))],
-		# 			  'Cost_T': mlp.costPerEpoch(),
-		# 			  'Acc_T': mlp.accuracy(),
-		# 			  'Cost_V': mlp.validCostPerEpoch(),
-		# 			  'Acc_V': mlp.validAccuracy()}).set_index('Epochs').to_csv("modelsDataFrame.csv")
 
 	except Exception as AE:
 		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
@@ -169,9 +131,9 @@ def main():
 	except KeyboardInterrupt:
 		print("\nKeyboard Interuption", file=sys.stderr)
 
+	print(f"model saved on 'data/{mlp.synthetic_name()}/mlp.npy'")
+
 	return
 
 if __name__ == "__main__":
 	main()
-
-# 'model-CCE-GD-24-24-0.0314.cvs'

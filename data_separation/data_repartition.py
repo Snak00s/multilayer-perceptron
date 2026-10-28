@@ -1,10 +1,14 @@
 import numpy as np
 import pandas as pd
-import random
 import sys
 from pathlib import Path
 
 from utils.parser import Parser
+
+def help():
+	print("this program will take a dataset as argument and slice it in 3 portion, train data, validation data and test data")
+	print("\t--dataset:\tset the dataset to slice")
+	return
 
 def createExpectedOutput(rawOutput: list):
 	ret = []
@@ -28,6 +32,7 @@ def count_occurence(arrayLike, to_find) -> int:
 def main():
 	try:
 		parser = Parser()
+		parser.special_help(help)
 		parser.add_arg(argName="dataset", ammount=1, argType=str)
 
 		args = parser.parse_args()
@@ -81,6 +86,9 @@ def main():
 	except Exception as AE:
 		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
 		exit(1)
+
+	except KeyboardInterrupt:
+		print("\nKeyboard Interuption", file=sys.stderr)
 
 	return
 

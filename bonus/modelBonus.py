@@ -1,69 +1,10 @@
 import numpy as np
 import random
-from dataclasses import dataclass
 import sys
+import time
 
-class confMatrix:
-
-	matrix: np.ndarray
-	classList: np.ndarray
-
-	def __init__(self, clas: int):
-		self.clas = clas
-		self.matrix = np.zeros((clas, clas), dtype=int)
-		self.classList = np.identity(clas, dtype=int)
-		return
-
-	def clear(self):
-		self.matrix = np.zeros((self.clas, self.clas), dtype=int)
-		return
-
-	def __compute_to_class(self, matrix):
-		arr = np.array(matrix)
-		normalized = np.zeros_like(arr)
-		normalized[np.argmax(arr)] = 1
-
-		idx = np.where(np.all(self.classList==normalized, axis=1))
-		
-		return idx
-
-	def compute_result(self, predicted, expected):
-		class_e = self.__compute_to_class(expected)
-		class_p = self.__compute_to_class(predicted)
-
-		self.matrix[class_e, class_p] += 1
-		return
-
-	#True Positive ------------------------------------------------
-	def	TP_class(self, i: int):
-		return self.matrix[i][i]
-
-	def TP(self):
-		return np.sum([self.TP_class(i) for i in range(self.clas)])
-
-	#False Negative -----------------------------------------------
-	def FN_class(self, i: int):
-		return np.sum(self.matrix[i]) - self.TP_class(i)
-
-	def FN(self):
-		return np.sum([self.FN_class(i) for i in range(self.clas)])
-
-	#False Positive -----------------------------------------------
-	def FP_class(self, i):
-		return np.sum(self.matrix[:, i]) - self.TP_class(i)
-
-	def FP(self):
-		return np.sum([self.FP_class(i) for i in range(self.clas)])
-
-	#True Negative ------------------------------------------------
-	def TN_class(self, i):
-		tn = np.delete(self.matrix, i, 0)
-		tn = np.delete(tn, i, 1)
-		return np.sum(tn)
-
-	def TN(self):
-		return np.sum([self.TN_class(i) for i in range(self.clas)])
-
+from bonus.layer import layer
+from bonus.confMatrix import confMatrix
 
 class routine_model:
 	def __init__(self):
@@ -219,6 +160,80 @@ class _validation:
 			self.validLayers[i].bias = layers[i].bias
 		return
 
+	#BONUS
+	def compute_confusion(self):
+		self.confMatrix.clear()
+		for j in range(len(self.validLayers[-1].activate())):
+			self.confMatrix.compute_result(self.validLayers[-1].activate()[j], self.expectedOutput[j])
+		TP = (self.confMatrix.TP_class(0), self.confMatrix.TP_class(1))
+		FP = (self.confMatrix.FP_class(0), self.confMatrix.FP_class(1))
+		FN = (self.confMatrix.FN_class(0), self.confMatrix.FP_class(1))
+
+		prec_0 = 0
+		if (TP[0] + FP[0] != 0):
+			prec_0 = TP[0] / (TP[0] + FP[0])
+
+		prec_1 = 0
+		if (TP[1] + FP[1] != 0):
+			prec_1 = TP[1] / (TP[1] + FP[1])
+
+		self.precision.append((prec_0 + prec_1) / 2)
+
+		rec_0 = 0
+		if (TP[0] + FN[0] != 0):
+			rec_0 = TP[0] / (TP[0] + FN[0])
+
+		rec_1 = 0
+		if (TP[1] + FN[1]):
+			rec_1 = TP[1] / (TP[1] + FN[1])
+
+		self.recall.append((rec_0 + rec_1) / 2)
+
+		self.f1_score.append(2 * (self.precision[-1] * self.recall[-1]) / (self.precision[-1] + self.recall[-1]))
+
+		return
+
+	#BONUS
+	def auc_roc(self):
+		seuils = [1.01] + [i / 10 for i in range(9, -1, -1)]
+
+		self.tpr = []
+		self.fpr = []
+
+		predictions = self.validLayers[-1].activate()
+		for seuil in seuils:
+			self.confMatrix.clear()
+
+			for j in range(len(predictions)):
+				if predictions[j][0] > seuil:
+					self.confMatrix.compute_result([1, 0], self.expectedOutput[j])
+				else:
+					self.confMatrix.compute_result([0, 1], self.expectedOutput[j])
+
+			TP = self.confMatrix.TP_class(0)
+			TN = self.confMatrix.TN_class(0)
+			FP = self.confMatrix.FP_class(0)
+			FN = self.confMatrix.FN_class(0)
+
+			actual_tpr = 0
+			if (TP + FN != 0):
+				actual_tpr = TP / (TP + FN)
+			actual_fpr = 0
+			if (FP + TN != 0):
+				actual_fpr = FP / (FP + TN)
+
+			self.tpr.append(actual_tpr)
+			self.fpr.append(actual_fpr)
+
+		points = sorted(zip(self.fpr, self.tpr))
+		auc = 0.0
+
+		for i in range(1, len(points)):
+			fpr_1, tpr_1 = points[i-1]
+			fpr_2, tpr_2 = points[i]
+			auc += (fpr_2 - fpr_1) * (tpr_1 + tpr_2) / 2
+		return auc
+
 	def __init__(self, mod: model, inputs: list, expOutputs: list):
 
 		self.validWeightMatrix = mod._weightMatrixs
@@ -240,74 +255,15 @@ class _validation:
 			self.validLayers[i]._sampleAmount = self.validSampleAmount
 			self.validLayers[i].nodes = np.zeros((self.validSampleAmount, self.validLayers[i].size()))
 		self.expectedOutput = np.array(expOutputs)
+
+		#BONUS
+		self.f1_score = []
+		self.precision = []
+		self.recall = []
+		self.fpr = []
+		self.tpr = []
+		self.confMatrix = confMatrix(self.validLayers[-1].size())
 		return
-
-@dataclass
-class layer:
-
-	_prevLayer: layer
-	_nextLayer: layer
-	_delta: np.ndarray
-	_activFunc: function
-
-	def __init__(self):
-		self._idx = 0
-		self._size = 0
-		self.nodes = np.array([], dtype=np.float64)
-		self.bias = np.array([], dtype=np.float64)
-		self._weightMatrix = np.array([], dtype=np.float64)
-		self._prevLayer = None
-		self._nextLayer = None
-		self._activate = None
-		self._sampleAmount = 0
-		self._delta = None
-		self._wGrad = None
-		self._bGrad = None
-		return
-
-	@classmethod
-	def createLayer(cls, size: int, activation: str='sigmoid'):
-		"""Create a layer with 'size' amount of nodes, this layer will use 'activation' as his activation function.
-		- activation - selst one of ('sigmoid', 'softmax') or sigmoid by default.
-		"""
-		obj = cls()
-		obj._size = size
-		obj.nodes = np.array([0 for _ in range(size)], dtype=np.float64)
-		match activation:
-			case 'sigmoid':
-				obj._activFunc = obj.sigmoid
-			case 'softmax':
-				obj._activFunc = obj.softmax
-			case _:
-				raise AssertionError(f"Invalid activation function: {activation}")
-		return obj
-
-	def sigmoid(self):
-		self._activate = np.array(1 / (1 + np.exp(-self.nodes)))
-		return self._activate
-
-	def softmax(self):
-		s = np.array([np.sum(np.exp(self.nodes[i])) for i in range(self._sampleAmount)])
-		self._activate = np.array([[np.exp(x) / s[i] for x in self.nodes[i]] for i in range(self._sampleAmount)])
-		return self._activate
-
-	def idx(self):
-		return self._idx
-
-	def size(self):
-		return self._size
-
-	def prevLayer(self):
-		return self._prevLayer
-
-	def nextLayer(self):
-		return self._nextLayer
-
-	def weightMatrix(self):
-		return self._weightMatrix
-
-	def activate(self):
-		return self._activate
 
 class model:
 
@@ -332,14 +288,21 @@ class model:
 		self._validCost = 0
 		self._validcostPerEpoch = []
 		self._validAccuracy = []
+		self._abrevLoss = ''
+		self._abrevOpti = ''
 
-		#Early Stopping
+		#BONUS
 		self._bestCost = sys.maxsize
 		self._patience = 0
 		self._minEcart = 0.0
 		self._precision = []
 		self._recall = []
 		self._f1_score = []
+		self._optiUsed = ""
+		self._totalEpoch = 0
+		self._fpr = []
+		self._tpr = []
+		self._timename = ""
 		return
 
 	@classmethod
@@ -358,6 +321,10 @@ class model:
 
 		#Bonus
 		obj._confMatrix = confMatrix(layerList[-1].size())
+		timestruct = time.localtime()
+		date = f"{timestruct.tm_mday}{timestruct.tm_mon}{timestruct.tm_year}"
+		hour = f"{timestruct.tm_hour}{timestruct.tm_min}{timestruct.tm_sec}"
+		obj._timename = date + hour
 		return obj
 
 	@staticmethod
@@ -478,6 +445,7 @@ class model:
 		match lossFunc:
 			case 'categoricalCrossentropy':
 				self._lossFunc = mlp_utils.categoricalCrossentropy
+				self._abrevLoss = "CCE"
 			case _:
 				raise AssertionError(f'Invalid loss function: {lossFunc}')
 
@@ -499,10 +467,16 @@ class model:
 		match optimizer:
 			case 'NesterovMomentum':
 				routine = _NesMomentum(self, 0.9)
+				self._optiUsed = "NesterovMomentum"
+				self._abrevOpti = "NM"
 			case 'GradientDescent':
 				routine = self
+				self._optiUsed = "GradientDescent"
+				self._abrevOpti = "GD"
 			case '':
 				routine = self
+				self._optiUsed = "GradientDescent"
+				self._abrevOpti = "GD"
 			case _:
 				raise AssertionError(f'Invalid training method: {optimizer}')
 
@@ -522,11 +496,6 @@ class model:
 			batchCost = []
 			batchAcc = []
 			samplePerBatch = []
-			precision_0 = []
-			precision_1 = []
-			recall_0 = []
-			recall_1 = []
-
 
 			step = int(0)
 			while step != -1: #loop over all dataset following the batchsize step
@@ -535,25 +504,9 @@ class model:
 				(co, acc) = routine.routine()
 				batchCost.append(co)
 				batchAcc.append(acc)
-				#BONUS
-				for j in range(len(self._layers[-1].activate())):
-					self._confMatrix.compute_result(self._layers[-1].activate()[j], self._expectedOutput[j])
-				TP = (self._confMatrix.TP_class(0), self._confMatrix.TP_class(1))
-				FP = (self._confMatrix.FP_class(0), self._confMatrix.FP_class(1))
-				FN = (self._confMatrix.FN_class(0), self._confMatrix.FP_class(1))
-				precision_0.append(TP[0] / (TP[0] + FP[0]))
-				precision_1.append(TP[1] / (TP[1] + FP[1]))
-				recall_0.append(TP[0] / (TP[0] + FN[0]))
-				recall_1.append(TP[1] / (TP[1] + FN[1]))
-				######
 
 			self._costPerEpoch.append(mlp_utils.ponderate(batchCost, samplePerBatch))	#ponderate all batch cost to define the epoch cost
 			self._accuracy.append(mlp_utils.ponderate(batchAcc, samplePerBatch))		#same for acc
-			#BONUS
-			self._precision.append((mlp_utils.ponderate(precision_0, samplePerBatch) + mlp_utils.ponderate(precision_1, samplePerBatch)) / 2)
-			self._recall.append((mlp_utils.ponderate(recall_0, samplePerBatch) + mlp_utils.ponderate(recall_1, samplePerBatch)) / 2)
-			self._f1_score.append(2 * (self._precision[-1] * self._recall[-1]) / (self._precision[-1] + self._recall[-1]))
-			######
 			
 			if (verbose is True):
 				print(f"epoch {i + 1} / {epoch} | cost = {self._costPerEpoch[-1]:.4f} | accuracy = {self._accuracy[-1]:.4f}", end=' ')
@@ -561,6 +514,9 @@ class model:
 			#Validation part ---------------------------------------------------------
 			vMod.updateBias(self._layers)	#apply the bias modification on the validation layers
 			vMod.fwdPropagation()			#feedforward
+
+			#BONUS
+			vMod.compute_confusion()
 
 			self._validCost = self._lossFunc(vMod.validLayers[-1].activate(), vMod.expectedOutput)
 			self._validcostPerEpoch.append(mlp_utils.batchCost(self._validCost, vMod.expectedOutput))
@@ -579,8 +535,14 @@ class model:
 			shufOutput = self._expectedOutput
 			(self._layers[0].nodes, self._expectedOutput) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)	#will shuffle all training inputs and outputs by respect of their correspondig index
 			self._layers[0]._activate = self._layers[0].nodes
-		
-		#-------------------------------------------------------------------------
+			#-------------------------------------------------------------------------
+			self._totalEpoch += 1
+		self._recall = vMod.recall.copy()
+		self._precision = vMod.precision.copy()
+		self._f1_score = vMod.f1_score.copy()
+		vMod.auc_roc()
+		self._tpr = vMod.tpr.copy()
+		self._fpr = vMod.fpr.copy()
 		return self
 
 	def useModel(self, testData: tuple[list, list]) -> tuple[float, float]:
@@ -603,6 +565,9 @@ class model:
 	def layers(self):
 		return self._layers
 
+	def total_epoch(self):
+		return self._totalEpoch
+
 	def costPerEpoch(self):
 		return self._costPerEpoch
 
@@ -623,3 +588,29 @@ class model:
 
 	def f1_score(self):
 		return self._f1_score
+
+	def fpr(self):
+		return self._fpr
+
+	def tpr(self):
+		return self._tpr
+
+	def __repr__(self):
+		ret = f"model :{"\n{\n\t"}class={self._layers[-1].size()}, train_epoch_amount={self._totalEpoch}\n\t{self._lossFunc.__name__} + {self._optiUsed}"
+		ret += "\n\tnetwork_shape :\n\t[\n\t"
+		for lay in self._layers:
+			ret += "\t" + lay.__repr__() + "\n\t"
+		ret += "]\n}"
+		return ret
+
+	def synthetic_name(self):
+
+		lay_shape = ''
+		siz = len(self._layers)
+		for i in range(1, siz - 1):
+			lay_shape += f"{self._layers[i].size()}"
+			if i + 1 != siz - 1:
+				lay_shape += "-"
+		ret = f"model-{self._abrevLoss}-{self._abrevOpti}-{lay_shape}-{self._timename}"
+
+		return ret

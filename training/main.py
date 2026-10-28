@@ -7,12 +7,23 @@ from pathlib import Path
 from training.model import model, layer
 from utils.parser import Parser
 
+def help():
+	print("model trainer, this program will train on the given data generated from 'data_separation.data_repartition'.")
+	print("\t--data:\t\t\t'mlp_data.npy' set the training data.")
+	print("\t--layer:\t\tint int int, determine the shape of the model.")
+	print("\t--epochs:\t\tset the ammount of time the model will train on the given data.")
+	print("\t--loss:\t\t\tset the loss function to use (there is only 'categoricalCrossentropy' lol).")
+	print("\t--learning_rate:\tset the learning rate (usualy 0 < lr < 1).")
+	print("\t--batch_size:\t\tset the batch size.")
+	return
+
 def main():
 	try:
 		# -----------------------Parsing----------------------
 
 		parser = Parser()
 
+		parser.special_help(help)
 		parser.add_arg("layer", ammount=0, argType=int)
 		parser.add_arg("epochs", ammount=1, argType=int)
 		parser.add_arg("loss", ammount=1, argType=str)
