@@ -4,19 +4,19 @@ import numpy as np
 import sys
 from pathlib import Path
 
-from bonus.modelBonus import model, layer, confMatrix
+from bonus.modelBonus import model, layer
 from utils.parser import Parser
 
 def help():
 	print("model trainer, this program will train on the given data generated from 'data_separation.data_repartition'.")
 	print("\t--data:\t\t\t'mlp_data.npy' set the training data.")
-	print("\t--layer:\t\tint int int, determine the shape of the model.")
+	print("\t--layer:\t\t'int' 'int' 'int', determine the shape of the model.")
 	print("\t--epochs:\t\tset the ammount of time the model will train on the given data.")
 	print("\t--loss:\t\t\tset the loss function to use (there is only 'categoricalCrossentropy' lol).")
 	print("\t--learning_rate:\tset the learning rate (usualy 0 < lr < 1).")
 	print("\t--batch_size:\t\tset the batch size.")
 	print("\t--optimizer:\t\tset the training algorith; to use.")
-	print("\t--early_stop:\t\t(int, float) with 0 < float < 1, special instruction, will stop the training if the model cost start to converge.")
+	print("\t--early_stop:\t\t'int,float' with 0 < float < 1, special instruction, will stop the training if the model cost start to converge.")
 	return
 
 def main():
@@ -117,9 +117,11 @@ def main():
 
 		plt.figure()
 		plt.plot(np.array(mlp.fpr()), np.array(mlp.tpr()))
+		plt.plot(np.array([0, 1]))
 		plt.title("AUC-ROC")
 		plt.xlabel("FPR")
 		plt.ylabel("TPR")
+		plt.legend([f"{mlp.synthetic_name()} (AUC = {mlp.auc():.2f})", 'Random guess'])
 		plt.savefig(path + "auc-roc.png")
 
 		#-----------------------------------------------------

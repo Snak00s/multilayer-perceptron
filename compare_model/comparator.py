@@ -25,6 +25,7 @@ def plot_roc(x_plot: list, y_plot: list, legend: list[str], x_label: str, y_labe
 	plt.figure()
 	for arg in zip(x_plot, y_plot):
 		plt.plot(arg[0], arg[1])
+	plt.plot(np.array([0, 1]))
 	plt.legend(legend)
 	plt.xlabel(x_label)
 	plt.ylabel(y_label)
@@ -77,7 +78,9 @@ def main():
 		plot_data(models_precision, models_name, "epoch", "precision", "Precision", "precision.png")
 		plot_data(models_recall, models_name, "epoch", "recall", "Recall", "recall.png")
 		plot_data(models_f1_score, models_name, "epoch", "f1_score", "F1_score", "f1_score.png")
-		plot_roc(models_fpr, models_tpr, models_name, "fpr", "tpr", "AUC-ROC", "auc-roc.png")
+
+		models_name_auc = [mod.synthetic_name() + f" (AUC = {mod.auc():.2f})" for mod in models_lst]
+		plot_roc(models_fpr, models_tpr, models_name_auc, "fpr", "tpr", "AUC-ROC", "auc-roc.png")
 			
 
 	except Exception as AE:

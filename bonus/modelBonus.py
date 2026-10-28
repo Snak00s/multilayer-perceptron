@@ -303,6 +303,7 @@ class model:
 		self._fpr = []
 		self._tpr = []
 		self._timename = ""
+		self._auc = 0
 		return
 
 	@classmethod
@@ -507,9 +508,6 @@ class model:
 
 			self._costPerEpoch.append(mlp_utils.ponderate(batchCost, samplePerBatch))	#ponderate all batch cost to define the epoch cost
 			self._accuracy.append(mlp_utils.ponderate(batchAcc, samplePerBatch))		#same for acc
-			
-			if (verbose is True):
-				print(f"epoch {i + 1} / {epoch} | cost = {self._costPerEpoch[-1]:.4f} | accuracy = {self._accuracy[-1]:.4f}", end=' ')
 
 			#Validation part ---------------------------------------------------------
 			vMod.updateBias(self._layers)	#apply the bias modification on the validation layers
@@ -522,6 +520,7 @@ class model:
 			self._validcostPerEpoch.append(mlp_utils.batchCost(self._validCost, vMod.expectedOutput))
 			self._validAccuracy.append(mlp_utils.calculateAccuracy(vMod.validLayers[-1].activate(), vMod.expectedOutput))
 			if (verbose is True):
+				print(f"epoch {i + 1} / {epoch} | cost = {self._costPerEpoch[-1]:.4f} | accuracy = {self._accuracy[-1]:.4f}", end=' ')
 				print(f"| validCost = {self._validcostPerEpoch[-1]:.4f} | validAccuracy = {self._validAccuracy[-1]:.4f}")
 
 			if (apply_ES is True):
@@ -540,7 +539,7 @@ class model:
 		self._recall = vMod.recall.copy()
 		self._precision = vMod.precision.copy()
 		self._f1_score = vMod.f1_score.copy()
-		vMod.auc_roc()
+		self._auc = vMod.auc_roc()
 		self._tpr = vMod.tpr.copy()
 		self._fpr = vMod.fpr.copy()
 		return self
@@ -594,6 +593,9 @@ class model:
 
 	def tpr(self):
 		return self._tpr
+
+	def auc(self):
+		return self._auc
 
 	def __repr__(self):
 		ret = f"model :{"\n{\n\t"}class={self._layers[-1].size()}, train_epoch_amount={self._totalEpoch}\n\t{self._lossFunc.__name__} + {self._optiUsed}"
