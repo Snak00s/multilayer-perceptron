@@ -24,6 +24,7 @@ def main():
 		parser = Parser()
 
 		parser.special_help(help)
+		parser.add_arg("data", ammount=1, argType=str)
 		parser.add_arg("layer", ammount=0, argType=int)
 		parser.add_arg("epochs", ammount=1, argType=int)
 		parser.add_arg("loss", ammount=1, argType=str)
@@ -34,8 +35,8 @@ def main():
 
 		#-----------------------Training----------------------
 
-		data = np.load('data/mlp_data.npy', allow_pickle=True)
-
+		data = np.load(args['data'][0], allow_pickle=True)
+		
 		data = data.item()
 
 		trainData : tuple = data['train']
