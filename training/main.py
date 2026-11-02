@@ -45,6 +45,9 @@ def main():
 		laySize.append(len(trainData[1][0]))
 		laySize.insert(0, len(trainData[0][0]))
 
+		for siz in laySize:
+			assert siz > 0, "All layers should have 1 or more neuron."
+
 		mlp = model.createNetwork([
 			layer.createLayer(size=laySize[i], activation='sigmoid')
 			if i < len(laySize) - 1

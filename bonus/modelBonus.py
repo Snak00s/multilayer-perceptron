@@ -440,7 +440,7 @@ class model:
 		"""
 		assert len(trainData[0]) == len(trainData[1]) and len(validData[0]) == len(validData[1]), "(Inputs, Outputs) len missmatch."
 		assert trainData[0].shape and trainData[1].shape and validData[0].shape and validData[1].shape
-		assert batchSize > 0 and learningRate > 0 and epoch > 0, "All integer value should be positive."
+		assert batchSize > 0 and learningRate > 0 and epoch > 0, "All numerical value should be positive."
 
 		#Loss Function setting -------------------------------------------------------
 		match lossFunc:

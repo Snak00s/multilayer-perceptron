@@ -15,7 +15,7 @@ def help():
 	print("\t--loss:\t\t\tset the loss function to use (there is only 'categoricalCrossentropy' lol).")
 	print("\t--learning_rate:\tset the learning rate (usualy 0 < lr < 1).")
 	print("\t--batch_size:\t\tset the batch size.")
-	print("\t--optimizer:\t\tset the training algorith; to use.")
+	print("\t--optimizer:\t\t('NesterovMomentum', 'GradientDescent')set the training algorithm to use.")
 	print("\t--early_stop:\t\t'int,float' with 0 < float < 1, special instruction, will stop the training if the model cost start to converge.")
 	return
 
@@ -48,6 +48,8 @@ def main():
 		laySize = args['layer']
 		laySize.append(len(trainData[1][0]))
 		laySize.insert(0, len(trainData[0][0]))
+		for siz in laySize:
+			assert siz > 0, "All layers should have 1 or more neuron."
 
 		mlp = model.createNetwork([
 			layer.createLayer(size=laySize[i], activation='sigmoid')
