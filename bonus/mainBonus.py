@@ -9,7 +9,7 @@ from utils.parser import Parser
 
 def help():
 	print("model trainer, this program will train on the given data generated from 'data_separation.data_repartition'.")
-	print("\t--data:\t\t\t'mlp_data.npy' set the training data.")
+	print("\t--data:\t\t\t'file.csv' set the training data (THOSE DATA SHOULD BE PREPROSSESED BY 'data_slicer').")
 	print("\t--layer:\t\t'int' 'int' 'int', determine the shape of the model.")
 	print("\t--epochs:\t\tset the ammount of time the model will train on the given data.")
 	print("\t--loss:\t\t\tset the loss function to use (there is only 'categoricalCrossentropy' lol).")
@@ -18,6 +18,17 @@ def help():
 	print("\t--optimizer:\t\t('NesterovMomentum', 'GradientDescent')set the training algorithm to use.")
 	print("\t--early_stop:\t\t'int,float' with 0 < float < 1, special instruction, will stop the training if the model cost start to converge.")
 	return
+
+def createExpectedOutput(rawOutput: list):
+	ret = []
+	for x in rawOutput:
+		if (x == 'M'):
+			ret.append([1, 0])
+		elif (x == 'B'):
+			ret.append([0, 1])
+		else:
+			raise AssertionError(f"Invalid output : {x}, should be 'B' or 'M'")
+	return ret
 
 def main():
 	try:
@@ -36,20 +47,28 @@ def main():
 
 		args = parser.parse_args()
 
-		#-----------------------Training----------------------
+		#---------------------Data Setting--------------------
 
-		data = np.load(args['data'][0], allow_pickle=True)
+		data = pd.read_csv(args['data'][0], header=None)
 
-		data = data.item()
+		train = data.loc[data.iloc[:, -1] == 'train'].iloc[:, 1:-1]
+		valid = data.loc[data.iloc[:, -1] == 'valid'].iloc[:, 1:-1]
 
-		trainData: tuple = data['train']
-		validData: tuple = data['valid']
+		trainInputs = np.array(train.iloc[:, 1:], dtype=np.float64)
+		trainInputs = (trainInputs - trainInputs.mean(axis=0)) / trainInputs.std(axis=0)
+		trainOuputs = np.array(createExpectedOutput(np.array(train.iloc[:, :1])))
+
+		validInputs = np.array(valid.iloc[:, 1:], dtype=np.float64)
+		validInputs = (validInputs - validInputs.mean(axis=0)) / validInputs.std(axis=0)
+		validOuputs = np.array(createExpectedOutput(np.array(valid.iloc[:, :1])))
 
 		laySize = args['layer']
-		laySize.append(len(trainData[1][0]))
-		laySize.insert(0, len(trainData[0][0]))
+		laySize.append(len(trainOuputs[0]))
+		laySize.insert(0, len(trainInputs[0]))
 		for siz in laySize:
 			assert siz > 0, "All layers should have 1 or more neuron."
+
+		#-----------------------Creation----------------------
 
 		mlp = model.createNetwork([
 			layer.createLayer(size=laySize[i], activation='sigmoid')
@@ -58,6 +77,8 @@ def main():
 			layer.createLayer(size=laySize[i], activation='softmax')
 			for i in range(len(laySize))
 			])
+
+		#-----------------------Training----------------------
 
 		#Optimizer setting (Bonus)
 		optimizer = ''
@@ -71,8 +92,8 @@ def main():
 			earlyStop = (int(earlyStop[0]), float(earlyStop[1]))
 
 		mlp.fit(
-				trainData=trainData,
-				validData=validData,
+				trainData=(trainInputs, trainOuputs),
+				validData=(validInputs, validOuputs),
 				learningRate=args['learning_rate'][0],
 				lossFunc=args['loss'][0],
 				batchSize=args['batch_size'][0],
@@ -82,7 +103,7 @@ def main():
 				earlyStopping=earlyStop
 			)
 
-		#-----------------------------------------------------
+		#-----------------------Plotting----------------------
 
 		path = f"data/{mlp.synthetic_name()}/"
 		model_path = Path(path + "mlp.npy")

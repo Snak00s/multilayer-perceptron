@@ -45,8 +45,8 @@ class mlp_utils:
 				bad += 1
 		return float(good / (good + bad))
 
-	def batchCost(costMatrix, expOutput):
-		return costMatrix / len(expOutput)
+	def batchCost(cost, expOutput):
+		return cost / len(expOutput)
 
 	def ponderate(matrix, samplePerBatch):
 		"""
@@ -376,9 +376,9 @@ class model:
 
 	def routine(self):
 			self.forwardPropagation()					#feedforward
-			costMatrix = self._lossFunc(self._layers[-1].activate(), self._expectedOutput)
+			cost = self._lossFunc(self._layers[-1].activate(), self._expectedOutput)
 			self.backPropagation()						#bacpropagation to learn on every batch
-			return (mlp_utils.batchCost(costMatrix, self._expectedOutput),
+			return (mlp_utils.batchCost(cost, self._expectedOutput),
 					mlp_utils.calculateAccuracy(self._layers[-1].activate(), self._expectedOutput))
 
 	def __fillTrainIO(self, inputs: np.ndarray, expectedOutput: np.ndarray):
@@ -529,7 +529,7 @@ class model:
 					print("EarlyStop !")
 					break
 
-			#Data organization (shuffle) ---------------------------------------------
+			#Data shuffle ------------------------------------------------------------
 			shufInputs = self._layers[0].nodes
 			shufOutput = self._expectedOutput
 			(self._layers[0].nodes, self._expectedOutput) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)	#will shuffle all training inputs and outputs by respect of their correspondig index

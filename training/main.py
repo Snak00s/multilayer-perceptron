@@ -8,43 +8,69 @@ from training.model import model, layer
 from utils.parser import Parser
 
 def help():
-	print("model trainer, this program will train on the given data generated from 'data_separation.data_repartition'.")
-	print("\t--data:\t\t\t'mlp_data.npy' set the training data.")
-	print("\t--layer:\t\tint int int, determine the shape of the model.")
+	print("model trainer, this program will train on the given data generated from 'data_slicer.data_slicer'.")
+	print("\t--data:\t\t\t'file.csv' set the training data (THOSE DATA SHOULD BE PREPROSSESED BY 'data_slicer').")
+	print("\noptionnal:")
+	print("\t--layer:\t\t'int' 'int' 'int', determine the shape of the model.")
 	print("\t--epochs:\t\tset the ammount of time the model will train on the given data.")
 	print("\t--loss:\t\t\tset the loss function to use (there is only 'categoricalCrossentropy' lol).")
 	print("\t--learning_rate:\tset the learning rate (usualy 0 < lr < 1).")
 	print("\t--batch_size:\t\tset the batch size.")
 	return
 
+def createExpectedOutput(rawOutput: list):
+	ret = []
+	for x in rawOutput:
+		if (x == 'M'):
+			ret.append([1, 0])
+		elif (x == 'B'):
+			ret.append([0, 1])
+		else:
+			raise AssertionError(f"Invalid output : {x}, should be 'B' or 'M'")
+	return ret
+
 def main():
 	try:
-		# -----------------------Parsing----------------------
+		#------------------------Parsing----------------------
 
 		parser = Parser()
 
 		parser.special_help(help)
 		parser.add_arg("data", ammount=1, argType=str)
-		parser.add_arg("layer", ammount=0, argType=int)
-		parser.add_arg("epochs", ammount=1, argType=int)
-		parser.add_arg("loss", ammount=1, argType=str)
-		parser.add_arg("learning_rate", ammount=1, argType=float)
-		parser.add_arg("batch_size", ammount=1, argType=int)
+		parser.add_arg("layer", ammount=0, argType=int, optionnal=True)
+		parser.add_arg("epochs", ammount=1, argType=int, optionnal=True)
+		parser.add_arg("loss", ammount=1, argType=str, optionnal=True)
+		parser.add_arg("learning_rate", ammount=1, argType=float, optionnal=True)
+		parser.add_arg("batch_size", ammount=1, argType=int, optionnal=True)
 
 		args = parser.parse_args()
 
-		#-----------------------Training----------------------
+		#---------------------Data Setting--------------------
 
-		data = np.load(args['data'][0], allow_pickle=True)
-		
-		data = data.item()
+		data = pd.read_csv(args['data'][0], header=None)
 
-		trainData : tuple = data['train']
-		validData : tuple = data['valid']
+		train = data.loc[data.iloc[:, -1] == 'train'].iloc[:, 1:-1]
+		valid = data.loc[data.iloc[:, -1] == 'valid'].iloc[:, 1:-1]
+
+		trainInputs = np.array(train.iloc[:, 1:], dtype=np.float64)
+		trainInputs = (trainInputs - trainInputs.mean(axis=0)) / trainInputs.std(axis=0)
+		trainOuputs = np.array(createExpectedOutput(np.array(train.iloc[:, :1])))
+
+		validInputs = np.array(valid.iloc[:, 1:], dtype=np.float64)
+		validInputs = (validInputs - validInputs.mean(axis=0)) / validInputs.std(axis=0)
+		validOuputs = np.array(createExpectedOutput(np.array(valid.iloc[:, :1])))
+
+		print("x_train shape :", trainInputs.shape)
+		print("x_valid shape :", validInputs.shape)
+
+		#-----------------------Creation----------------------
 
 		laySize = args['layer']
-		laySize.append(len(trainData[1][0]))
-		laySize.insert(0, len(trainData[0][0]))
+		if (len(laySize) == 0):
+			laySize = [len(trainInputs[0]), 24, 24, len(trainOuputs[0])]
+		else:
+			laySize.append(len(trainOuputs[0]))
+			laySize.insert(0, len(trainInputs[0]))
 
 		for siz in laySize:
 			assert siz > 0, "All layers should have 1 or more neuron."
@@ -57,17 +83,43 @@ def main():
 			for i in range(len(laySize))
 			])
 
+		#---------------------Param init----------------------
+		lr = args['learning_rate']
+		if (len(lr) == 0):
+			lr = 0.0314
+		else:
+			lr = args['learning_rate'][0]
+
+		loss = args['loss']
+		if (len(loss) == 0):
+			loss = 'categoricalCrossentropy'
+		else:
+			loss = args['loss'][0]
+
+		batchSize = args['batch_size']
+		if (len(args['batch_size']) == 0):
+			batchSize = 8
+		else:
+			batchSize = args['batch_size'][0]
+
+		epochs = args['epochs']
+		if (len(args['epochs']) == 0):
+			epochs = 84
+		else:
+			epochs = args['epochs'][0]
+
+		#-----------------------Training----------------------
 		mlp.fit(
-				trainData=trainData,
-				validData=validData,
-				learningRate=args['learning_rate'][0],
-				lossFunc=args['loss'][0],
-				batchSize=args['batch_size'][0],
-				epoch=args['epochs'][0],
+				trainData=(trainInputs, trainOuputs),
+				validData=(validInputs, validOuputs),
+				learningRate=lr,
+				lossFunc=loss,
+				batchSize=batchSize,
+				epoch=epochs,
 				verbose=True
 			)
 
-		#-----------------------------------------------------
+		#-----------------------Plotting----------------------
 
 		plt.figure()
 		plt.plot(np.array(mlp.costPerEpoch()))

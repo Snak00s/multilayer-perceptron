@@ -34,8 +34,8 @@ class mlp_utils:
 				bad += 1
 		return float(good / (good + bad))
 
-	def batchCost(costMatrix, expOutput):
-		return costMatrix / len(expOutput)
+	def batchCost(cost, expOutput):
+		return cost / len(expOutput)
 
 	def ponderate(matrix, samplePerBatch):
 		"""
@@ -105,8 +105,9 @@ class model:
 
 	def __backPropagation(self):
 		for layer in reversed(self._layers):
+			layer._delta = self.__delta(layer)
+		for layer in reversed(self._layers):
 			if layer.prevLayer() is not None:
-				layer._delta = self.__delta(layer)
 				layer._prevMatrix -= (self._learningRate / self._sampleAmount * (layer._delta.T @ layer.prevLayer().activate()))
 				layer.bias -= ((self._learningRate / self._sampleAmount) * np.sum(layer._delta, axis=0))
 		return self
@@ -253,8 +254,8 @@ class model:
 				step = self.__updateNodes(step, batchSize)
 				samplePerBatch.append(self._sampleAmount)
 				self.__forwardPropagation()					#feedforward
-				costMatrix = self._lossFunc(self._layers[-1].activate(), self._expectedOutput)
-				batchCost.append(mlp_utils.batchCost(costMatrix, self._expectedOutput))				#store batch cost generate an average cost
+				cost = self._lossFunc(self._layers[-1].activate(), self._expectedOutput)
+				batchCost.append(mlp_utils.batchCost(cost, self._expectedOutput))				#store batch cost generate an average cost
 				batchAcc.append(mlp_utils.calculateAccuracy(self._layers[-1].activate(), self._expectedOutput)) # same for acc
 				self.__backPropagation()					#bacpropagation to learn on every batch
 
@@ -272,7 +273,7 @@ class model:
 			if (verbose is True):
 				print(f"| validCost = {self._validcostPerEpoch[-1]:.4f} | validAccuracy = {self._validAccuracy[-1]:.4f}")
 
-			#Data organization (shuffle) ---------------------------------------------
+			#Data shuffle ------------------------------------------------------------
 			shufInputs = self._layers[0].nodes
 			shufOutput = self._expectedOutput
 			(self._layers[0].nodes, self._expectedOutput) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)	#will shuffle all training inputs and outputs by respect of their correspondig index
