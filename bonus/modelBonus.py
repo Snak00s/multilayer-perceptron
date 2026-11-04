@@ -139,14 +139,8 @@ class _validation:
 		for layer in self.validLayers:
 			if layer.idx() == 0:
 				continue
-			if layer.idx() == 1:
-				for i in range(self.validSampleAmount):
-					layerInput = layer.prevLayer().nodes[i]
-					layer.nodes[i] = np.array([(layerInput @ layer.weightMatrix()[j]) + layer.bias[j] for j in range(layer.size())])
-			else:
-				layerInput = layer.prevLayer()._activFunc()
-				for i in range(self.validSampleAmount):
-					layer.nodes[i] = np.array([(layerInput[i] @ layer.weightMatrix()[g]) + layer.bias[g] for g in range(layer.size())])
+			layerInput = layer.prevLayer().nodes if layer.idx() == 1 else layer.prevLayer()._activFunc()
+			layer.nodes = layerInput @ layer.weightMatrix().T + layer.bias
 		self.validLayers[-1]._activFunc()
 		return self
 
@@ -380,7 +374,7 @@ class model:
 			layerInput = lay.prevLayer().nodes if lay.idx() == 1 else lay.prevLayer()._activFunc()
 			# for i in range(self._sampleAmount):
 			# 	lay.nodes[i] = np.array([layerInput[i] @ lay.weightMatrix()[g] + lay.bias[g] for g in range(lay.size())])
-			lay.nodes = layerInput @ lay.weightMatrix().T + lay.bias   # (N, size)
+			lay.nodes = layerInput @ lay.weightMatrix().T + lay.bias
 		self._layers[-1]._activFunc()
 		return
 

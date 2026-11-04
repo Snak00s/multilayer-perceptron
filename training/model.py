@@ -120,19 +120,15 @@ class model:
 		return self
 
 	def __forwardPropagation(self):
-		for layer in self._layers:
-			if layer.idx() == 0:
+		for lay in self._layers:
+			if lay.idx() == 0:	#should not apply any activation on the input layer
 				continue
-			if layer.idx() == 1:	#should not apply any activation on the input layer
-				for i in range(self._sampleAmount):
-					layerInput = layer.prevLayer().nodes[i]
-					layer.nodes[i] = np.array([layerInput @ layer.prevMatrix()[j] + layer.bias[j] for j in range(layer.size())])
-			else:
-				layerInput = layer.prevLayer().activFunc()
-				for i in range(self._sampleAmount):
-					layer.nodes[i] = np.array([layerInput[i] @ layer.prevMatrix()[g] + layer.bias[g] for g in range(layer.size())])
+			layerInput = lay.prevLayer().nodes if lay.idx() == 1 else lay.prevLayer().activFunc()
+			# for i in range(self._sampleAmount):
+			# 	lay.nodes[i] = np.array([layerInput[i] @ lay.weightMatrix()[g] + lay.bias[g] for g in range(lay.size())])
+			lay.nodes = layerInput @ lay.prevMatrix().T + lay.bias
 		self._layers[-1].activFunc()
-		return self
+		return
 
 	class __validation:
 
@@ -142,14 +138,8 @@ class model:
 			for layer in self.validLayers:
 				if layer.idx() == 0:
 					continue
-				if layer.idx() == 1:
-					for i in range(self.validSampleAmount):
-						layerInput = layer.prevLayer().nodes[i]
-						layer.nodes[i] = np.array([(layerInput @ layer.prevMatrix()[j]) + layer.bias[j] for j in range(layer.size())])
-				else:
-					layerInput = layer.prevLayer().activFunc()
-					for i in range(self.validSampleAmount):
-						layer.nodes[i] = np.array([(layerInput[i] @ layer.prevMatrix()[g]) + layer.bias[g] for g in range(layer.size())])
+				layerInput = layer.prevLayer().nodes if layer.idx() == 1 else layer.prevLayer().activFunc()
+				layer.nodes = layerInput @ layer.prevMatrix().T + layer.bias
 			self.validLayers[-1].activFunc()
 			return self
 
