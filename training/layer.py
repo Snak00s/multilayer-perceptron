@@ -8,6 +8,8 @@ class layer:
 	_nextLayer: layer
 	_delta: np.ndarray
 	activFunc: function
+	activDeriv: function
+	activJacob: function
 
 	def __init__(self):
 		self._idx = 0
@@ -36,8 +38,12 @@ class layer:
 		match activation:
 			case 'sigmoid':
 				obj.activFunc = obj.sigmoid
+				obj.activDeriv = obj.sigmoidDerivate
+				obj.activJacob = obj.sigmoidJacob
 			case 'softmax':
 				obj.activFunc = obj.softmax
+				obj.activDeriv = None
+				obj.activJacob = obj.softmaxJacob
 			case _:
 				raise AssertionError(f"Invalid activation function: {activation}")
 		return obj
@@ -46,10 +52,37 @@ class layer:
 		self._activate = np.array(1 / (1 + np.exp(-self.nodes)))
 		return self._activate
 
+	def sigmoidDerivate(self):
+		a = self._activate
+		return a * (1 - a)
+
 	def softmax(self):
-		s = np.array([np.sum(np.exp(self.nodes[i])) for i in range(self._sampleAmount)])
+		s = np.sum(np.exp(self.nodes), axis=1)
 		self._activate = np.array([[np.exp(x) / s[i] for x in self.nodes[i]] for i in range(self._sampleAmount)])
 		return self._activate
+
+	def softmaxJacob(self, s):
+		jacobian_m = np.diag(s)
+
+		for i in range(len(jacobian_m)):
+			for j in range(len(jacobian_m)):
+				if i == j:
+					jacobian_m[i][j] = s[i] * (1 - s[i])
+				else: 
+					jacobian_m[i][j] = -s[i] * s[j]
+		return jacobian_m
+
+	def sigmoidJacob(self, s):
+		jacobian_m = np.diag(s)
+
+		for i in range(len(jacobian_m)):
+			for j in range(len(jacobian_m)):
+				if i == j:
+					jacobian_m[i][j] = s[i] * (1 - s[i])
+				else: 
+					jacobian_m[i][j] = 0
+		return jacobian_m
+
 
 	def idx(self):
 		return self._idx

@@ -34,11 +34,11 @@ def main():
 
 		data = pd.read_csv(args['data'][0], header=None)
 
-		testData = data.iloc[:, 1:-1]
+		testData = data.iloc[:, 1:-1].sample(frac=1)
 
-		testInputs = np.array(testData.iloc[:, 1:])
+		testInputs = np.array(testData.iloc[:100, 1:])
 		testInputs = (testInputs - testInputs.mean(axis=0)) / testInputs.std(axis=0)
-		testOutputs = np.array(createExpectedOutput(np.array(testData.iloc[:, :1])))
+		testOutputs = np.array(createExpectedOutput(np.array(testData.iloc[:100, :1])))
 
 		mlp = np.load(args["model"][0], allow_pickle=True)
 		mlp : model = mlp.item()

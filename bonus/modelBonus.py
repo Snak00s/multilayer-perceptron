@@ -29,6 +29,9 @@ class mlp_utils:
 		"""
 		return -np.sum(expPredict * np.log(predict + 1e-12))
 
+	def categoricalCrossentropyDerivate(predict, expected):
+		return -expected / (predict + 1e-12)
+
 	def	calculateAccuracy(predict: list[list], expPredict: list[list]):
 		"""
 		Calculate accuray on the given 'predict' + 'expPredict' combination
@@ -96,17 +99,17 @@ class _NesMomentum:
 
 	def update_dirParam(self):
 		for i in range(len(self._dirWeight)):
-			self._dirWeight[i] = self._weightMatrixs[i] - self._factor * self._weightVelocity[i] #maybe +
+			self._dirWeight[i] = self._weightMatrixs[i] - self._factor * self._weightVelocity[i]
 			self._layers[i+1]._weightMatrix = self._dirWeight[i]
 
 			self._dirBias[i] = self._biasMatrixs[i] - self._factor * self._biasVelocity[i]
 			self._layers[i+1].bias = self._dirBias[i]
 		return
 
-	def update_velocity(self, batchSize: int):
+	def update_velocity(self):
 		for i in range(len(self._weightVelocity)):
 			self._weightVelocity[i] *= self._factor
-			self._weightVelocity[i] += self._lr * self._layers[i+1]._wGrad #maybe -
+			self._weightVelocity[i] += self._lr * self._layers[i+1]._wGrad
 
 			self._biasVelocity[i] *= self._factor
 			self._biasVelocity[i] += self._lr * self._layers[i+1]._bGrad
@@ -114,7 +117,7 @@ class _NesMomentum:
 
 	def update_trueParam(self):
 		for i in range(len(self._weightMatrixs)):
-			self._weightMatrixs[i] -= self._weightVelocity[i] #maybe +
+			self._weightMatrixs[i] -= self._weightVelocity[i]
 			self._biasMatrixs[i] -= self._biasVelocity[i]
 
 			self._layers[i+1]._weightMatrix = self._weightMatrixs[i]
@@ -124,7 +127,7 @@ class _NesMomentum:
 	def routine(self):
 		self.update_dirParam()
 		(co, acc) = self._refMod.routine()
-		self.update_velocity(self._refMod._sampleAmount)
+		self.update_velocity()
 		self.update_trueParam()
 		return (co, acc)
 
@@ -167,7 +170,7 @@ class _validation:
 			self.confMatrix.compute_result(self.validLayers[-1].activate()[j], self.expectedOutput[j])
 		TP = (self.confMatrix.TP_class(0), self.confMatrix.TP_class(1))
 		FP = (self.confMatrix.FP_class(0), self.confMatrix.FP_class(1))
-		FN = (self.confMatrix.FN_class(0), self.confMatrix.FP_class(1))
+		FN = (self.confMatrix.FN_class(0), self.confMatrix.FN_class(1))
 
 		prec_0 = 0
 		if (TP[0] + FP[0] != 0):
@@ -195,17 +198,19 @@ class _validation:
 
 	#BONUS
 	def auc_roc(self):
-		seuils = [1.01] + [i / 10 for i in range(9, -1, -1)]
 
 		self.tpr = []
 		self.fpr = []
 
 		predictions = self.validLayers[-1].activate()
+		scores = predictions[:, 0]
+		seuils = [np.inf] + sorted(set(scores), reverse=True)   # un point par score distinct
+
 		for seuil in seuils:
 			self.confMatrix.clear()
 
 			for j in range(len(predictions)):
-				if predictions[j][0] > seuil:
+				if predictions[j][0] >= seuil:
 					self.confMatrix.compute_result([1, 0], self.expectedOutput[j])
 				else:
 					self.confMatrix.compute_result([0, 1], self.expectedOutput[j])
@@ -273,6 +278,7 @@ class model:
 	_lossFunc: function
 	_weightMatrixs: list[np.ndarray]
 	_confMatrix: confMatrix
+	_lossFuncDeriv: function
 
 	def __init__(self):
 		self._layers = []
@@ -312,7 +318,7 @@ class model:
 		obj = cls()
 		obj._layers = layerList
 		obj._weightMatrixs = [obj.__createInterLayerMatrix(layerList[x].size(), layerList[x + 1].size()) for x in range(len(layerList) - 1)]
-		obj._biasMatrixs = [np.array([1 for _ in range(layerList[x].size())], dtype=np.float64) for x in range(1, len(layerList))]
+		obj._biasMatrixs = [np.array([0 for _ in range(layerList[x].size())], dtype=np.float64) for x in range(1, len(layerList))]
 		for lay in zip(range(len(obj._layers)), obj._layers):
 			lay[1]._idx = lay[0]
 
@@ -345,9 +351,12 @@ class model:
 
 	def _delta(self, actualLayer: layer): 
 		if (actualLayer.nextLayer() == None):
-			return np.array(actualLayer.activate() - self._expectedOutput)
-		activate = actualLayer.activate()
-		dA = activate * (1 - activate)
+			# return np.array(actualLayer.activate() - self._expectedOutput)
+			loss = self._lossFuncDeriv(actualLayer.activate(), self._expectedOutput)
+			return np.array([loss[x] @ actualLayer.activJacob(actualLayer.activate()[x]) for x in range(len(self._expectedOutput))])
+
+		dA = actualLayer.activDeriv()
+
 		delta = (actualLayer.nextLayer()._delta @ actualLayer.nextLayer().weightMatrix() * dA)
 
 		return delta
@@ -369,8 +378,9 @@ class model:
 			if lay.idx() == 0:	#should not apply any activation on the input layer
 				continue
 			layerInput = lay.prevLayer().nodes if lay.idx() == 1 else lay.prevLayer()._activFunc()
-			for i in range(self._sampleAmount):
-				lay.nodes[i] = np.array([layerInput[i] @ lay.weightMatrix()[g] + lay.bias[g] for g in range(lay.size())])
+			# for i in range(self._sampleAmount):
+			# 	lay.nodes[i] = np.array([layerInput[i] @ lay.weightMatrix()[g] + lay.bias[g] for g in range(lay.size())])
+			lay.nodes = layerInput @ lay.weightMatrix().T + lay.bias   # (N, size)
 		self._layers[-1]._activFunc()
 		return
 
@@ -446,6 +456,7 @@ class model:
 		match lossFunc:
 			case 'categoricalCrossentropy':
 				self._lossFunc = mlp_utils.categoricalCrossentropy
+				self._lossFuncDeriv = mlp_utils.categoricalCrossentropyDerivate
 				self._abrevLoss = "CCE"
 			case _:
 				raise AssertionError(f'Invalid loss function: {lossFunc}')
@@ -527,13 +538,13 @@ class model:
 				c = self._earlyStopping()
 				if (c >= earlyStopping[0]):
 					print("EarlyStop !")
+					self._totalEpoch += 1
 					break
 
 			#Data shuffle ------------------------------------------------------------
-			shufInputs = self._layers[0].nodes
-			shufOutput = self._expectedOutput
-			(self._layers[0].nodes, self._expectedOutput) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)	#will shuffle all training inputs and outputs by respect of their correspondig index
-			self._layers[0]._activate = self._layers[0].nodes
+			shufInputs = self._trainInputs
+			shufOutput = self._trainOutputs
+			(self._trainInputs, self._trainOutputs) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)	#will shuffle all training inputs and outputs by respect of their correspondig index
 			#-------------------------------------------------------------------------
 			self._totalEpoch += 1
 		self._recall = vMod.recall.copy()

@@ -18,6 +18,9 @@ class mlp_utils:
 		"""
 		return -np.sum(expPredict * np.log(predict + 1e-12))
 
+	def categoricalCrossentropyDerivate(predict, expected):
+		return -expected / predict
+
 	def	calculateAccuracy(predict: list[list], expPredict: list[list]):
 		"""
 		Calculate accuray on the given 'predict' + 'expPredict' combination
@@ -49,6 +52,7 @@ class model:
 	_expectedOutput: list[float]
 	_trainInputs: list[float]
 	_lossFunc: function
+	_lossFuncDeriv: function
 
 	def __init__(self):
 		self._layers = []
@@ -96,9 +100,12 @@ class model:
 
 	def __delta(self, actualLayer: layer): 
 		if (actualLayer.nextLayer() == None):
-			return np.array(actualLayer.activate() - self._expectedOutput)
-		activate = actualLayer.activate()
-		dA = activate * (1 - activate)
+			# return np.array(actualLayer.activate() - self._expectedOutput)
+			loss = self._lossFuncDeriv(actualLayer.activate(), self._expectedOutput)
+			return np.array([loss[x] @ actualLayer.activJacob(actualLayer.activate()[x]) for x in range(len(self._expectedOutput))])
+
+		dA = actualLayer.activDeriv()
+
 		delta = (actualLayer.nextLayer()._delta @ actualLayer.nextMatrix() * dA)
 
 		return delta
@@ -202,9 +209,9 @@ class model:
 			if i != 0:
 				self._layers[i].nodes = np.zeros((self._sampleAmount, self._layers[i].size())) #nodes should be reset because their value are not important for the learning
 			else:
-				self._layers[i].nodes = inputSample
-				self._layers[i]._activate = inputSample.copy()
-		self._expectedOutput = self._trainOutputs[step:step + batchSize]
+				self._layers[i].nodes = np.array(inputSample)
+				self._layers[i]._activate = np.array(inputSample.copy())
+		self._expectedOutput = np.array(self._trainOutputs[step:step + batchSize])
 		if (step + self._sampleAmount == len(self._trainInputs)):
 			return -1
 		return step + self._sampleAmount
@@ -233,6 +240,7 @@ class model:
 		match lossFunc:
 			case 'categoricalCrossentropy':
 				self._lossFunc = mlp_utils.categoricalCrossentropy
+				self._lossFuncDeriv = mlp_utils.categoricalCrossentropyDerivate
 			case _:
 				raise AssertionError(f'Invalid loss function: {lossFunc}')
 		self.__fillTrainIO(trainData[0], trainData[1])
@@ -274,10 +282,9 @@ class model:
 				print(f"| validCost = {self._validcostPerEpoch[-1]:.4f} | validAccuracy = {self._validAccuracy[-1]:.4f}")
 
 			#Data shuffle ------------------------------------------------------------
-			shufInputs = self._layers[0].nodes
-			shufOutput = self._expectedOutput
-			(self._layers[0].nodes, self._expectedOutput) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)	#will shuffle all training inputs and outputs by respect of their correspondig index
-			self._layers[0]._activate = self._layers[0].nodes
+			shufInputs = self._trainInputs
+			shufOutput = self._trainOutputs
+			(self._trainInputs, self._trainOutputs) = mlp_utils.unison_shuffled_copies(shufInputs, shufOutput)	#will shuffle all training inputs and outputs by respect of their correspondig index
 			#-------------------------------------------------------------------------
 
 		return self

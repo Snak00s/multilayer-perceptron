@@ -44,7 +44,6 @@ def main():
 		parser.add_arg("batch_size", ammount=1, argType=int, optionnal=True)
 
 		args = parser.parse_args()
-
 		#---------------------Data Setting--------------------
 
 		data = pd.read_csv(args['data'][0], header=None)

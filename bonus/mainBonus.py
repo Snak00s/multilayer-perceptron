@@ -51,15 +51,20 @@ def main():
 
 		data = pd.read_csv(args['data'][0], header=None)
 
+		siz = len(data.columns)
+		cancerType = data.pop(1)
+		dataType = data.pop(siz - 1)
+		data = (data - data.mean(axis=0, numeric_only=True)) / data.std(axis=0, numeric_only=True)
+		data.insert(1, "1", cancerType)
+		data.insert(siz - 1, f"{siz - 1}", dataType)
+
 		train = data.loc[data.iloc[:, -1] == 'train'].iloc[:, 1:-1]
 		valid = data.loc[data.iloc[:, -1] == 'valid'].iloc[:, 1:-1]
 
 		trainInputs = np.array(train.iloc[:, 1:], dtype=np.float64)
-		trainInputs = (trainInputs - trainInputs.mean(axis=0)) / trainInputs.std(axis=0)
 		trainOuputs = np.array(createExpectedOutput(np.array(train.iloc[:, :1])))
 
 		validInputs = np.array(valid.iloc[:, 1:], dtype=np.float64)
-		validInputs = (validInputs - validInputs.mean(axis=0)) / validInputs.std(axis=0)
 		validOuputs = np.array(createExpectedOutput(np.array(valid.iloc[:, :1])))
 
 		laySize = args['layer']
