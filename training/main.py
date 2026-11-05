@@ -44,20 +44,38 @@ def main():
 		parser.add_arg("batch_size", ammount=1, argType=int, optionnal=True)
 
 		args = parser.parse_args()
+
 		#---------------------Data Setting--------------------
 
 		data = pd.read_csv(args['data'][0], header=None)
+		idx_colonne = data.select_dtypes(include=['str']).apply(
+   			lambda col: col.str.fullmatch("B|M", case=True).all()
+		)
+		idx_output = len(idx_colonne.loc[idx_colonne.iloc[:] == True].index)
+		assert idx_output == 1,													"Invalid dataset, missing the expected output columns."
+		assert data.iloc[:, -1].str.fullmatch("train|valid", case=True).all(),	"Invalid dataset, please use dataset created by data_slicer.data_slicer."
+		assert len(data.columns) == 33,											"Invalid dataset, it should have 33 columns, please use dataset created by data_slicer.data_slicer."
 
-		train = data.loc[data.iloc[:, -1] == 'train'].iloc[:, 1:-1]
-		valid = data.loc[data.iloc[:, -1] == 'valid'].iloc[:, 1:-1]
+		siz = len(data.columns)
+		cancerType = data.pop(idx_output)
+		dataType = data.pop(siz - 1)
+		data = (data - data.mean(axis=0, numeric_only=True)) / data.std(axis=0, numeric_only=True)
+		data.insert(siz - 2, f"{siz - 2}", dataType)
 
-		trainInputs = np.array(train.iloc[:, 1:], dtype=np.float64)
-		trainInputs = (trainInputs - trainInputs.mean(axis=0)) / trainInputs.std(axis=0)
-		trainOuputs = np.array(createExpectedOutput(np.array(train.iloc[:, :1])))
+		trainmask = data.iloc[:, -1] == 'train'
+		validmask = data.iloc[:, -1] == 'valid'
 
-		validInputs = np.array(valid.iloc[:, 1:], dtype=np.float64)
-		validInputs = (validInputs - validInputs.mean(axis=0)) / validInputs.std(axis=0)
-		validOuputs = np.array(createExpectedOutput(np.array(valid.iloc[:, :1])))
+		train = data.loc[trainmask].iloc[:, 1:-1]
+		valid = data.loc[validmask].iloc[:, 1:-1]
+
+		cancerTrain = cancerType.loc[trainmask]
+		cancervalid = cancerType.loc[validmask]
+
+		trainInputs = np.array(train, dtype=np.float64)
+		trainOuputs = np.array(createExpectedOutput(np.array(cancerTrain)))
+
+		validInputs = np.array(valid, dtype=np.float64)
+		validOuputs = np.array(createExpectedOutput(np.array(cancervalid)))
 
 		print("x_train shape :", trainInputs.shape)
 		print("x_valid shape :", validInputs.shape)

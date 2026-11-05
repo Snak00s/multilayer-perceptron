@@ -10,7 +10,7 @@ from utils.parser import Parser
 def help():
 	print("model trainer, this program will train on the given data generated from 'data_separation.data_repartition'.")
 	print("\t--data:\t\t\t'file.csv' set the training data (THOSE DATA SHOULD BE PREPROSSESED BY 'data_slicer').")
-	print("\t--layer:\t\t'int' 'int' 'int', determine the shape of the model.")
+	print("\t--layer:\t\t'int' 'int' ..., determine the shape of the model.")
 	print("\t--epochs:\t\tset the ammount of time the model will train on the given data.")
 	print("\t--loss:\t\t\tset the loss function to use (there is only 'categoricalCrossentropy' lol).")
 	print("\t--learning_rate:\tset the learning rate (usualy 0 < lr < 1).")
@@ -37,11 +37,11 @@ def main():
 		parser = Parser()
 		parser.special_help(help)
 		parser.add_arg("data", ammount=1, argType=str)
-		parser.add_arg("layer", ammount=0, argType=int)
-		parser.add_arg("epochs", ammount=1, argType=int)
-		parser.add_arg("loss", ammount=1, argType=str)
-		parser.add_arg("learning_rate", ammount=1, argType=float)
-		parser.add_arg("batch_size", ammount=1, argType=int)
+		parser.add_arg("layer", ammount=0, argType=int, optionnal=True)
+		parser.add_arg("epochs", ammount=1, argType=int, optionnal=True)
+		parser.add_arg("loss", ammount=1, argType=str, optionnal=True)
+		parser.add_arg("learning_rate", ammount=1, argType=float, optionnal=True)
+		parser.add_arg("batch_size", ammount=1, argType=int, optionnal=True)
 		parser.add_arg("optimizer", ammount=1, argType=str, optionnal=True)
 		parser.add_arg("early_stop", ammount=1, argType=tuple, optionnal=True)
 
@@ -50,30 +50,49 @@ def main():
 		#---------------------Data Setting--------------------
 
 		data = pd.read_csv(args['data'][0], header=None)
+		idx_colonne = data.select_dtypes(include=['str']).apply(
+   			lambda col: col.str.fullmatch("B|M", case=True).all()
+		)
+		idx_output = len(idx_colonne.loc[idx_colonne.iloc[:] == True].index)
+		assert idx_output == 1,													"Invalid dataset, missing the expected output columns."
+		assert data.iloc[:, -1].str.fullmatch("train|valid", case=True).all(),	"Invalid dataset, please use dataset created by data_slicer.data_slicer."
+		assert len(data.columns) == 33,											"Invalid dataset, it should have 33 columns, please use dataset created by data_slicer.data_slicer."
 
 		siz = len(data.columns)
-		cancerType = data.pop(1)
+		cancerType = data.pop(idx_output)
 		dataType = data.pop(siz - 1)
 		data = (data - data.mean(axis=0, numeric_only=True)) / data.std(axis=0, numeric_only=True)
-		data.insert(1, "1", cancerType)
-		data.insert(siz - 1, f"{siz - 1}", dataType)
+		data.insert(siz - 2, f"{siz - 2}", dataType)
 
-		train = data.loc[data.iloc[:, -1] == 'train'].iloc[:, 1:-1]
-		valid = data.loc[data.iloc[:, -1] == 'valid'].iloc[:, 1:-1]
+		trainmask = data.iloc[:, -1] == 'train'
+		validmask = data.iloc[:, -1] == 'valid'
 
-		trainInputs = np.array(train.iloc[:, 1:], dtype=np.float64)
-		trainOuputs = np.array(createExpectedOutput(np.array(train.iloc[:, :1])))
+		train = data.loc[trainmask].iloc[:, 1:-1]
+		valid = data.loc[validmask].iloc[:, 1:-1]
 
-		validInputs = np.array(valid.iloc[:, 1:], dtype=np.float64)
-		validOuputs = np.array(createExpectedOutput(np.array(valid.iloc[:, :1])))
+		cancerTrain = cancerType.loc[trainmask]
+		cancervalid = cancerType.loc[validmask]
 
-		laySize = args['layer']
-		laySize.append(len(trainOuputs[0]))
-		laySize.insert(0, len(trainInputs[0]))
-		for siz in laySize:
-			assert siz > 0, "All layers should have 1 or more neuron."
+		trainInputs = np.array(train, dtype=np.float64)
+		trainOuputs = np.array(createExpectedOutput(np.array(cancerTrain)))
+
+		validInputs = np.array(valid, dtype=np.float64)
+		validOuputs = np.array(createExpectedOutput(np.array(cancervalid)))
+
+		print("x_train shape :", trainInputs.shape)
+		print("x_valid shape :", validInputs.shape)
 
 		#-----------------------Creation----------------------
+
+		laySize = args['layer']
+		if (len(laySize) == 0):
+			laySize = [len(trainInputs[0]), 24, 24, len(trainOuputs[0])]
+		else:
+			laySize.append(len(trainOuputs[0]))
+			laySize.insert(0, len(trainInputs[0]))
+
+		for siz in laySize:
+			assert siz > 0, "All layers should have 1 or more neuron."
 
 		mlp = model.createNetwork([
 			layer.createLayer(size=laySize[i], activation='sigmoid')
@@ -83,7 +102,30 @@ def main():
 			for i in range(len(laySize))
 			])
 
-		#-----------------------Training----------------------
+		#---------------------Param init----------------------
+		lr = args['learning_rate']
+		if (len(lr) == 0):
+			lr = 0.0314
+		else:
+			lr = args['learning_rate'][0]
+
+		loss = args['loss']
+		if (len(loss) == 0):
+			loss = 'categoricalCrossentropy'
+		else:
+			loss = args['loss'][0]
+
+		batchSize = args['batch_size']
+		if (len(args['batch_size']) == 0):
+			batchSize = 8
+		else:
+			batchSize = args['batch_size'][0]
+
+		epochs = args['epochs']
+		if (len(args['epochs']) == 0):
+			epochs = 84
+		else:
+			epochs = args['epochs'][0]
 
 		#Optimizer setting (Bonus)
 		optimizer = ''
@@ -96,13 +138,14 @@ def main():
 			earlyStop = args['early_stop'][0]
 			earlyStop = (int(earlyStop[0]), float(earlyStop[1]))
 
+		#-----------------------Training----------------------
 		mlp.fit(
 				trainData=(trainInputs, trainOuputs),
 				validData=(validInputs, validOuputs),
-				learningRate=args['learning_rate'][0],
-				lossFunc=args['loss'][0],
-				batchSize=args['batch_size'][0],
-				epoch=args['epochs'][0],
+				learningRate=lr,
+				lossFunc=loss,
+				batchSize=batchSize,
+				epoch=epochs,
 				verbose=True,
 				optimizer=optimizer,
 				earlyStopping=earlyStop
