@@ -62,14 +62,15 @@ def main():
 		siz = len(data.columns)
 		cancerType = data.pop(idx_output)
 		dataType = data.pop(siz - 1)
+		data = data.iloc[:, 1:]
 		data = (data - data.mean(axis=0, numeric_only=True)) / data.std(axis=0, numeric_only=True)
-		data.insert(siz - 2, f"{siz - 2}", dataType)
+		data.insert(siz - 3, f"{siz - 3}", dataType)
 
 		trainmask = data.iloc[:, -1] == 'train'
 		validmask = data.iloc[:, -1] == 'valid'
 
-		train = data.loc[trainmask].iloc[:, 1:-1]
-		valid = data.loc[validmask].iloc[:, 1:-1]
+		train = data.loc[trainmask].iloc[:, :-1]
+		valid = data.loc[validmask].iloc[:, :-1]
 
 		cancerTrain = cancerType.loc[trainmask]
 		cancervalid = cancerType.loc[validmask]
