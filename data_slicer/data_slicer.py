@@ -48,6 +48,8 @@ def main():
 		print(f"x_train shape : {trainRows.shape}	| {tr_prcB:.2f}% 'B', {100 - tr_prcB:.2f}% 'M'")
 		print(f"x_valid shape : {validRows.shape}	| {va_prcB:.2f}% 'B', {100 - va_prcB:.2f}% 'M'")
 
+		print(f"Dataset saved at: './{path}'")
+
 	except Exception as AE:
 		print(f"{type(AE).__name__}: {AE}", file=sys.stderr)
 		exit(1)
