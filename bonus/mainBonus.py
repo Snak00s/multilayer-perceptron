@@ -50,13 +50,14 @@ def main():
 		#---------------------Data Setting--------------------
 
 		data = pd.read_csv(args['data'][0], header=None)
+		assert (data.iloc[:, -1].dtype == 'str'
+				and data.iloc[:, -1].str.fullmatch("train|valid", case=True).all()),	"Invalid dataset, please use dataset created by data_slicer.data_slicer." 
 		idx_colonne = data.select_dtypes(include=['str']).apply(
-   			lambda col: col.str.fullmatch("B|M", case=True).all()
+			lambda col: col.str.fullmatch("B|M", case=True).all()
 		)
 		idx_output = len(idx_colonne.loc[idx_colonne.iloc[:] == True].index)
-		assert idx_output == 1,													"Invalid dataset, missing the expected output columns."
-		assert data.iloc[:, -1].str.fullmatch("train|valid", case=True).all(),	"Invalid dataset, please use dataset created by data_slicer.data_slicer."
-		assert len(data.columns) == 33,											"Invalid dataset, it should have 33 columns, please use dataset created by data_slicer.data_slicer."
+		assert idx_output == 1,															"Invalid dataset, missing the expected output columns."
+		assert len(data.columns) == 33,													"Invalid dataset, it should have 33 columns, please use dataset created by data_slicer.data_slicer."
 
 		siz = len(data.columns)
 		cancerType = data.pop(idx_output)
